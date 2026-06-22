@@ -57,6 +57,8 @@ class ClaimVerdict(BaseModel):
     source: Source | None = None  # derived by the verifier when the quote is located
 
 
+# Specify as TypedDict, instead of Pydantic model, for LangGraph dict-merge;
+# also not LLM-facing so no validation needed.
 class GraphState(TypedDict, total=False):
     """State passed between LangGraph nodes."""
 
