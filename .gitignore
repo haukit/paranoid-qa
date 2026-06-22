@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Project artifacts (large / derived / local)
+data/
+.storage/
+.env
+
+# Local editor config
+.idea/
+.vscode/
+
+# Caches
+.pytest_cache/
+.ragas_cache/
+
+# OS
+.DS_Store
