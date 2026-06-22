@@ -99,6 +99,10 @@ def make_li_llm(
             temperature=temp,
             request_timeout=600.0,
         )
+    if prov == "openai":
+        from llama_index.llms.openai import OpenAI
+
+        return OpenAI(model=name, temperature=temp)
 
     raise ValueError(
         f"No LlamaIndex LLM configured for provider={prov!r}. "
@@ -112,7 +116,7 @@ def make_embedder(model: str | None = None, *, provider: str | None = None):
     LlamaIndex has no single init function, so we dispatch on the provider explicitly.
     """
     name = model or settings.embed_model
-    prov = provider or settings.provider
+    prov = provider or settings.embed_provider
 
     if prov == "ollama":
         from llama_index.embeddings.ollama import OllamaEmbedding

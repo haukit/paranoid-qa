@@ -6,18 +6,19 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "langgraph>=0.2",
-    "langchain-ollama>=0.2",
+    "langchain-openai>=0.2",
     "llama-index-core>=0.11",
-    "llama-index-llms-ollama>=0.3",
-    "llama-index-embeddings-ollama>=0.3",
+    "llama-index-llms-openai>=0.2",
+    "llama-index-embeddings-openai>=0.2",
     "llama-index-readers-file>=0.2",
     "llama-index-retrievers-bm25>=0.4",
+    "pycryptodome>=3.20",   # decrypt AES-encrypted PDFs during ingestion
     "pydantic>=2.6",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.5"]
-openai = ["langchain-openai>=0.2", "llama-index-embeddings-openai>=0.2"]
+ollama = ["langchain-ollama>=0.2", "llama-index-llms-ollama>=0.3", "llama-index-embeddings-ollama>=0.3"]
 anthropic = ["langchain-anthropic>=0.2"]
 cohere = ["langchain-cohere>=0.3", "llama-index-embeddings-cohere>=0.2"]
 rerank = ["sentence-transformers"]
