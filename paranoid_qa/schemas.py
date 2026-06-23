@@ -83,3 +83,4 @@ class GraphState(TypedDict, total=False):
     verdicts: list[ClaimVerdict]
     faithful: bool
     attempts: int
+    context: str

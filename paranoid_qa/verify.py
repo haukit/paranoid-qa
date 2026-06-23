@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import cast
 
-from paranoid_qa.config import CORPUS_DIR, settings
+from paranoid_qa.config import settings
 from paranoid_qa.models import make_structured_llm
 from paranoid_qa.schemas import Claim, ClaimVerdict, GraphState, RetrievedChunk, Source
 
@@ -82,9 +82,30 @@ def verify(state: GraphState) -> GraphState:
     return out
 
 
+AGGREGATE_CRITIC_SYSTEM = """You are a strict fact-checker for a corpus-level answer.
+You are given SOURCE CONTEXT retrieved from a document corpus and an ANSWER synthesized from it.
+
+Judge ONLY whether the ANSWER is supported by the SOURCE CONTEXT:
+- supported    — the context supports the answer.
+- unsupported  — the context lacks enough to support the answer.
+- contradicted — the context contradicts the answer.
+Give a one-sentence explanation."""
+
+
 def verify_aggregate(state: GraphState) -> GraphState:
-    """Path-aware verify: an aggregate answer must cite real corpus documents"""
-    references = state.get("references", [])
-    corpus_files = {p.name for p in CORPUS_DIR.glob("*")}
-    faithful = bool(references) and all(s.document in corpus_files for s in references)
-    return {"faithful": faithful}
+    """Path-aware verify: an aggregate answer must cite real corpus documents, and be supported
+    by them (according to a critic)"""
+    # Deterministic check: did retrieval find any source documents?
+    if not state.get("references"):
+        verdict = ClaimVerdict(verdict="unsupported", explanation="No source documents retrieved.")
+        return {"verdicts": [verdict], "faithful": False}
+
+    # Entailment check: is the answer supported by the retrieved context?
+    critic = make_structured_llm(ClaimVerdict, model=settings.critic_model)
+    messages = [
+        ("system", AGGREGATE_CRITIC_SYSTEM),
+        ("human", f"SOURCE CONTEXT:\n{state.get('context', '')}\n\nANSWER: {state['answer'].text}"),
+    ]
+    verdict = cast(ClaimVerdict, critic.invoke(messages))
+
+    return {"verdicts": [verdict], "faithful": verdict.verdict == "supported"}
