@@ -43,7 +43,7 @@ import json
 from pathlib import Path
 
 from paranoid_qa.schemas import Answer, Claim, GraphState, RetrievedChunk, Source
-from paranoid_qa.verify import verify_aggregate, verify_claim
+from paranoid_qa.verify import verify_claim
 
 
 def run_case(case: dict) -> dict:
@@ -58,12 +58,9 @@ def run_case(case: dict) -> dict:
         verdict = verify_claim(claim, [chunk])
         is_gate = case["gold"] == "fabricated"
     else:  # aggregate-path case
-        state: GraphState = {
-            "context": case["context"],
-            "answer": Answer(claims=[Claim(text=case["answer"], quote="")]),
-            "references": [Source(document=d) for d in case["references"]],
-        }
-        verdict = verify_aggregate(state)["verdicts"][0]
+        claim = Claim(text=case["answer"])  # no quote
+        references = [Source(document=d) for d in case["references"]]
+        verdict = verify_claim(claim, [], case["context"], references)
         is_gate = not case["references"]
     return {
         "id": case["id"],

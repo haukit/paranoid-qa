@@ -24,11 +24,17 @@ class Route(BaseModel):
 
 
 class Claim(BaseModel):
-    """One atomic factual statement plus the verbatim source span backing it."""
+    """One atomic factual statement plus the evidence backing it.
+
+    Grounding depends on path:
+    - specific:     `quote` is a verbatim span from a retrieved chunk.
+    - aggregate:    `quote` is None since a corpus-level synthesis usually cannot be quoted
+                    directly; the backing for this is in the Answer's `references` instead."""
 
     text: str = Field(description="A single, atomic factual statement.")
-    quote: str = Field(
-        description="Verbatim span copied from the retrieved documents that supports `text`."
+    quote: str | None = Field(
+        default=None,
+        description="Verbatim span copied from the retrieved documents that supports `text`.",
     )
 
 
@@ -51,9 +57,11 @@ class RetrievedChunk(TypedDict):
 
 
 class Answer(BaseModel):
-    """The generator's structured output: an answer decomposed into cited claims."""
+    """The generator's structured output: an answer decomposed into cited claims,
+    plus source refs for aggregate answers."""
 
     claims: list[Claim] = Field(default_factory=list)
+    references: list[Source] = Field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -79,7 +87,6 @@ class GraphState(TypedDict, total=False):
     chunks: list[RetrievedChunk]
     grade: str  # "yes" | "no" from the relevance grader
     answer: Answer
-    references: list[Source]  # source refs backing an aggregate answer
     verdicts: list[ClaimVerdict]
     faithful: bool
     attempts: int

@@ -19,7 +19,12 @@ def main() -> None:
 
     print(answer.text, "\n")
     for c in answer.claims:
-        print(f"- {c.text}\n    quote: {c.quote!r}")
+        line = f"- {c.text}"
+        if c.quote is not None:
+            line += f"\n    quote: {c.quote!r}"
+        print(line)
+    if answer.references:
+        print("\nsources:", ", ".join(str(s) for s in answer.references))
 
 
 if __name__ == "__main__":

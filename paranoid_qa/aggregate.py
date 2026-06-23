@@ -13,6 +13,7 @@ from lightrag.utils import EmbeddingFunc
 from llama_index.core import SimpleDirectoryReader
 
 from paranoid_qa.config import CORPUS_DIR, PROJECT_ROOT, settings
+from paranoid_qa.models import make_structured_llm
 from paranoid_qa.schemas import Answer, Claim, GraphState, Source
 
 LIGHTRAG_DIR = PROJECT_ROOT / ".lightrag"  # persisted graph
@@ -82,8 +83,26 @@ def _references_from_context(context: str) -> list[Source]:
     return [Source(document=name) for name in cited]
 
 
+DECOMPOSE_SYSTEM = """You are given an ANSWER to a corpus-level question. Break it into atomic
+factual claims: each a single, self-contained statement that can be checked on its own. Copy the
+meaning faithfully — do not add, remove, or embellish information, and ignore any inline citation
+markers like [1]. Return only the claims."""
+
+
+def _decompose(answer_text: str) -> list[Claim]:
+    """Split a corpus-level prose answer into atomic claims.
+
+    Aggregate claims carry no verbatim quote (a corpus-level synthesis isn't quotable from any
+    single chunk); they're grounded by the Answer's source references instead.
+    """
+    gen = make_structured_llm(Answer, model=settings.gen_model)
+    messages = [("system", DECOMPOSE_SYSTEM), ("human", answer_text)]
+    decomposed = cast(Answer, gen.invoke(messages))
+    return [Claim(text=c.text) for c in decomposed.claims]  # rebuild so quote stays None
+
+
 def aggregate_answer(state: GraphState) -> GraphState:
-    """Answer a corpus-level question; derive references + context from the graph for verify.
+    """Answer a corpus-level question, then structure the prose into verificable claims.
 
     Runs two queries on the same question: one synthesizes the prose answer, one returns the
     retrieved context. They are separate aquery calls but return the same context because
@@ -101,8 +120,12 @@ def aggregate_answer(state: GraphState) -> GraphState:
     raw, context = _run(_query())
     answer_text, context = cast(str, raw), cast(str, context)
 
+    answer = Answer(
+        claims=_decompose(answer_text),
+        references=_references_from_context(context),
+    )
+
     return {
-        "answer": Answer(claims=[Claim(text=answer_text, quote="")]),
-        "references": _references_from_context(context),
+        "answer": answer,
         "context": context,
     }

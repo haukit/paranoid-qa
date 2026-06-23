@@ -44,36 +44,57 @@ Choose exactly one verdict:
 Give a one-sentence explanation."""
 
 
-def verify_claim(claim: Claim, chunks: list[RetrievedChunk]) -> ClaimVerdict:
-    """Verify one claim: locate the quote, then the LLM critic."""
-    # Located the quote
-    located = locate_quote(claim.quote, chunks)
-    if located is None:
-        return ClaimVerdict(
-            verdict="fabricated",
-            explanation="Quote not found in any retrieved chunk (deterministic check)",
-        )
-    source = Source(document=located["document"], page=located["page"])
+def verify_claim(
+    claim: Claim,
+    chunks: list[RetrievedChunk],
+    context: str = "",
+    references: list[Source] | None = None,
+) -> ClaimVerdict:
+    """Verify one claim against its evidence.
 
-    # Use a model from a different family to assess entailment against the located chunk
+    - `quote` present -> specific: the quote must locate verbatim in a retrieved chunk,
+      then the critic judges entailment against that chunk; the chunk's metadata becomes the citation.
+    - `quote` absent -> aggregate: the claim is judged against the retrieved content, gated on
+      retrieval having found any source documents (references)."""
+
+    if claim.quote is not None:
+        located = locate_quote(claim.quote, chunks)
+        if located is None:
+            return ClaimVerdict(
+                verdict="fabricated",
+                explanation="Quote not found in any retrieved chunk (deterministic check)",
+            )
+
+        source = Source(document=located["document"], page=located["page"])
+
+        # Use a model from a different family to assess entailment against the located chunk
+        critic = make_structured_llm(ClaimVerdict, model=settings.critic_model)
+        messages = [
+            ("system", CRITIC_SYSTEM),
+            ("human", f"SOURCE:\n{located['text']}\n\nCLAIM: {claim.text}\n\nQUOTE: {claim.quote}"),
+        ]
+        verdict = cast(ClaimVerdict, critic.invoke(messages))
+        verdict.source = source
+        return verdict
+
+    # aggregate
+    if not references:
+        return ClaimVerdict(verdict="unsupported", explanation="No source documents retrieved.")
     critic = make_structured_llm(ClaimVerdict, model=settings.critic_model)
     messages = [
-        ("system", CRITIC_SYSTEM),
-        ("human", f"SOURCE:\n{located['text']}\n\nCLAIM: {claim.text}\n\nQUOTE: {claim.quote}"),
+        ("system", AGGREGATE_CRITIC_SYSTEM),
+        ("human", f"SOURCE CONTENT:\n{context}\n\nCLAIM: {claim.text}"),
     ]
-    verdict = cast(ClaimVerdict, critic.invoke(messages))
-    verdict.source = source
-    return verdict
+    return cast(ClaimVerdict, critic.invoke(messages))
 
 
 def verify(state: GraphState) -> GraphState:
     """Graph node: run the critic over every claim and flag faithfulness"""
     answer = state["answer"]
-    chunks = state["chunks"]
-
-    verdicts = [verify_claim(c, chunks) for c in answer.claims]
-
-    # Case: empty claims mean content isn't there -> accept so we don't spend up our budget chasing
+    verdicts = [
+        verify_claim(c, state.get("chunks", []), state.get("context", ""), answer.references)
+        for c in answer.claims
+    ]
     faithful = all(v.verdict == "supported" for v in verdicts)
 
     out: GraphState = {"verdicts": verdicts, "faithful": faithful}
@@ -83,29 +104,11 @@ def verify(state: GraphState) -> GraphState:
 
 
 AGGREGATE_CRITIC_SYSTEM = """You are a strict fact-checker for a corpus-level answer.
-You are given SOURCE CONTEXT retrieved from a document corpus and an ANSWER synthesized from it.
+You are given SOURCE CONTEXT retrieved from a document corpus and a CLAIM drawn from an answer
+synthesized over it.
 
-Judge ONLY whether the ANSWER is supported by the SOURCE CONTEXT:
-- supported    — the context supports the answer.
-- unsupported  — the context lacks enough to support the answer.
-- contradicted — the context contradicts the answer.
+Judge ONLY whether the CLAIM is supported by the SOURCE CONTEXT:
+- supported    — the context supports the claim.
+- unsupported  — the context lacks enough to support the claim.
+- contradicted — the context contradicts the claim.
 Give a one-sentence explanation."""
-
-
-def verify_aggregate(state: GraphState) -> GraphState:
-    """Path-aware verify: an aggregate answer must cite real corpus documents, and be supported
-    by them (according to a critic)"""
-    # Deterministic check: did retrieval find any source documents?
-    if not state.get("references"):
-        verdict = ClaimVerdict(verdict="unsupported", explanation="No source documents retrieved.")
-        return {"verdicts": [verdict], "faithful": False}
-
-    # Entailment check: is the answer supported by the retrieved context?
-    critic = make_structured_llm(ClaimVerdict, model=settings.critic_model)
-    messages = [
-        ("system", AGGREGATE_CRITIC_SYSTEM),
-        ("human", f"SOURCE CONTEXT:\n{state.get('context', '')}\n\nANSWER: {state['answer'].text}"),
-    ]
-    verdict = cast(ClaimVerdict, critic.invoke(messages))
-
-    return {"verdicts": [verdict], "faithful": verdict.verdict == "supported"}
