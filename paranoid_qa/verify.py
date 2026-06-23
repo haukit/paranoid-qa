@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import cast
 
-from paranoid_qa.config import settings
+from paranoid_qa.config import CORPUS_DIR, settings
 from paranoid_qa.models import make_structured_llm
 from paranoid_qa.schemas import Claim, ClaimVerdict, GraphState, RetrievedChunk, Source
 
@@ -80,3 +80,11 @@ def verify(state: GraphState) -> GraphState:
     if not faithful:
         out["attempts"] = state.get("attempts", 0) + 1
     return out
+
+
+def verify_aggregate(state: GraphState) -> GraphState:
+    """Path-aware verify: an aggregate answer must cite real corpus documents"""
+    references = state.get("references", [])
+    corpus_files = {p.name for p in CORPUS_DIR.glob("*")}
+    faithful = bool(references) and all(s.document in corpus_files for s in references)
+    return {"faithful": faithful}

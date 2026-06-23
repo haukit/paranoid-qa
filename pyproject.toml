@@ -14,6 +14,7 @@ dependencies = [
     "llama-index-retrievers-bm25>=0.4",
     "pycryptodome>=3.20",   # decrypt AES-encrypted PDFs during ingestion
     "pydantic>=2.6",
+    "lightrag-hku>=1.5.3",
 ]
 
 [project.optional-dependencies]

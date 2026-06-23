@@ -11,6 +11,18 @@ class Grade(BaseModel):
     )
 
 
+class Route(BaseModel):
+    """Router decision: which path answers this question."""
+
+    kind: Literal["specific", "aggregate"] = Field(
+        description=(
+            "'specific' = about a particular event/document/detail, answerable from a few "
+            "retrieved passages; 'aggregate' = corpus-level counts, trends, themes, or "
+            "comparisons across many documents."
+        )
+    )
+
+
 class Claim(BaseModel):
     """One atomic factual statement plus the verbatim source span backing it."""
 
@@ -63,9 +75,11 @@ class GraphState(TypedDict, total=False):
     """State passed between LangGraph nodes."""
 
     question: str
+    route: str  # "specific" | "aggregate" (set by the router)
     chunks: list[RetrievedChunk]
     grade: str  # "yes" | "no" from the relevance grader
     answer: Answer
+    references: list[Source]  # source refs backing an aggregate answer
     verdicts: list[ClaimVerdict]
     faithful: bool
     attempts: int

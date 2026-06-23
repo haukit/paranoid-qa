@@ -7,6 +7,7 @@ __pycache__/
 # Project artifacts (large / derived / local)
 data/
 .storage/
+.lightrag/
 .env
 
 # Local editor config
