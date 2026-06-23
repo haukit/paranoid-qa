@@ -42,7 +42,7 @@ import argparse
 import json
 from pathlib import Path
 
-from paranoid_qa.schemas import Answer, Claim, GraphState, RetrievedChunk, Source
+from paranoid_qa.schemas import Claim, RetrievedChunk, Source
 from paranoid_qa.verify import verify_claim
 
 
