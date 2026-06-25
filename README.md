@@ -85,6 +85,25 @@ Some thoughts:
 - Under the current eval approach, low recall values do not clearly indicate whether the retriever or the reranker is the bottleneck. The reranker could have dropped a chunk it did retrieve, since it returns only a subset of retrieved chunks. The recall values were high for this corpus so I proceeded with confidence instead of further splitting up the eval (assuming eval set is reasonably difficult).
 - MRR score is decently high, so this leaves headroom to pass fewer chunks to the generator and reduce the token usage.
 
+### Critic verification
+
+I measured the critic as a binary decision: of the claims it accepts, how many are grounded (precision), and of the grounded claims, how many it accepts (recall). Precision matters most here, since a false positive is an ungrounded claim reaching the user.
+
+I generated a labelled set of 106 (claim, quote, source) triples from this corpus. This was done by using a stronger model (GPT-4o, a different model from the GPT-4o-mini critic to avoid self-preference) to write true claim-quote pairs from real chunks, then manufacturing hard negatives from them:
+- `unsupported` swaps in a quote from a different report.
+- `contradicted` flips one fact in the claim ("hard to release" becomes "easy to release"); these contradictions were generated with the stronger model as well.
+- `fabricated` attaches a quote that is absent from the source.
+
+Across 106 triples:
+
+| metric | value |
+|--------|-------|
+| precision | 0.967 |
+| recall | 1.000 |
+| 4-way accuracy | 0.991 |
+
+One claim was a false positive: a `contradicted` claim, "the NTSB recommended banning open-door flights with harnesses that are easy to release", was accepted as supported. The source bans the hard-to-release harnesses and exempts the easy-to-release ones, so it contradicts the claim. The critic matched on the shared topic and missed the inversion; its explanation even quoted the clause that refutes the claim.
+
 ## TODO
 
 - Router: add few-shot examples to reduce phrasing-sensitive misroutes (e.g. "which report involves X" vs "how many reports involve X").
@@ -92,5 +111,5 @@ Some thoughts:
 - Rewrite node: anchor to the original question, show the rejected docs, keep a rewrite history; route `re_retrieve` through reformulation so it fetches different chunks.
 - Aggregate eval: rephrase questions to be more unambiguous and grade on the cited references rather than prose substrings.
 - `verify_aggregate`: add an LLM entailment pass (does the answer follow from the cited documents?) on top of reference existence.
-- Evaluation: a reproducible generator for the critic's labeled set, generation faithfulness / answer relevance (LLM-judge), multi-hop retrieval with NDCG, and the candidate-ceiling Recall@10.
+- Evaluation: generation faithfulness / answer relevance (LLM-judge), multi-hop retrieval with NDCG, the candidate-ceiling Recall@10, and harder critic negatives (more "unless"-style inversions).
 - Serving: FastAPI `/ask` endpoint, Phoenix tracing, Dockerfile.
