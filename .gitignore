@@ -5,7 +5,7 @@ __pycache__/
 *.egg-info/
 
 # Project artifacts (large / derived / local)
-data/
+*.pdf
 .storage/
 .lightrag/
 .env

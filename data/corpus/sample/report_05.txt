@@ -1,0 +1,19 @@
+**Incident Report: LSA Fuel Exhaustion Forced Landing**  
+**Registration:** N123LS  
+**Date:** March 15, 2023  
+**Location:** Millfield Regional Airport (MFR), Millfield, Ohio  
+
+**Sequence of Events:**  
+On March 15, 2023, at approximately 14:30 local time, a light sport aircraft (LSA) registered as N123LS, piloted by experienced aviator John Thompson, departed Millfield Regional Airport for a local scenic flight. The aircraft, a 2021 Aeroprakt A-22, had been fueled to capacity prior to departure, with the pilot estimating a flight time of about two hours.
+
+After approximately 90 minutes in the air, the pilot elected to return to MFR. During the descent, at an altitude of 2,500 feet, the aircraft experienced a sudden loss of engine power. The pilot confirmed the fuel level and realized that the fuel gauge indicated empty. An immediate assessment revealed that the fuel selector was inadvertently positioned to the "off" position during flight.
+
+With no engine power, the pilot initiated a forced landing procedure and successfully glided the aircraft to a nearby open field, approximately 3 miles from the airport. The aircraft touched down without incident, and the pilot exited unharmed.
+
+**Findings:**  
+- The aircraft's fuel gauge was not functioning correctly, showing full at departure.
+- The pilot did not conduct a fuel check prior to the return descent.
+- The fuel selector was found in the "off" position post-landing.
+
+**Probable Cause:**  
+Pilot error due to failure to verify fuel selector position and fuel gauge accuracy before flight.

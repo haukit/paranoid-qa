@@ -1,0 +1,17 @@
+**Incident Report: Tail-Rotor Control Failure of Helicopter Air-Ambulance**  
+**Registration:** N234HA  
+**Date:** September 15, 2023  
+**Location:** Cedar Valley Hospital Helipad, Cedar Valley, TX  
+
+**Sequence of Events:**  
+On September 15, 2023, at approximately 14:30 CDT, the air-ambulance helicopter N234HA, operated by Cedar Valley Air Services, was preparing for takeoff from the helipad of Cedar Valley Hospital after picking up a patient. The pilot conducted the pre-flight checks, which indicated normal operational parameters. 
+
+As the helicopter began its ascent, approximately 200 feet above ground level, the pilot noticed a sudden and severe yaw to the right, accompanied by a noticeable drop in tail-rotor effectiveness. The pilot attempted to counter the yaw by applying left pedal input, but the helicopter continued to rotate uncontrollably. Realizing the impending loss of control, the pilot executed an emergency descent procedure, attempting to land safely back at the helipad.
+
+The helicopter impacted the ground roughly 50 feet from the helipad perimeter, resulting in substantial damage to the airframe but no injuries to the crew or the patient onboard. Emergency services responded promptly, and the pilot was able to exit the helicopter without assistance.
+
+**Findings:**  
+Post-incident investigations revealed that a failure in the tail-rotor control linkage had occurred due to improper maintenance procedures. The maintenance logs indicated that the tail-rotor controls had not been inspected as per the recommended cycle, leading to the failure during flight.
+
+**Probable Cause:**  
+Failure of tail-rotor control due to inadequate maintenance practices.

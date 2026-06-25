@@ -1,0 +1,18 @@
+**Aviation Incident Report**
+
+**Registration:** N123AB  
+**Date:** March 15, 2023  
+**Location:** Greenfield Municipal Airport (GFM), Greenfield, USA  
+
+**Sequence of Events:**  
+At approximately 10:30 AM, a single-engine flight trainer, a Cessna 172, took off from runway 27 at Greenfield Municipal Airport. The aircraft, piloted by a student with an instructor onboard, climbed to an altitude of 800 feet when the engine suddenly lost power. The instructor immediately took control, attempting to troubleshoot the situation while maintaining a stable descent.
+
+The aircraft's descent rate increased, prompting the pilot to declare an emergency to the control tower. The instructor identified an open field approximately 1 mile west of the airport and aimed for a controlled landing. The aircraft touched down in the field, sustaining minor damage to the landing gear but avoiding any injuries to the occupants.
+
+Emergency services were dispatched and arrived on the scene shortly after the landing to ensure the safety of the pilots. The aircraft was subsequently examined for mechanical failure.
+
+**Findings:**  
+Investigators discovered that a fuel line had become disconnected from the carburetor, leading to an immediate loss of fuel supply to the engine. The maintenance records indicated that a recent service had been performed on the fuel system, but the connection was not properly secured.
+
+**Probable Cause:**  
+Improper reassembly of the fuel system during maintenance led to a loss of engine power shortly after takeoff.

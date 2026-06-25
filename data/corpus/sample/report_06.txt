@@ -1,0 +1,18 @@
+**Incident Report**
+
+**Registration:** N712AB  
+**Date:** April 15, 2023  
+**Location:** 30,000 feet over the Rocky Mountains, USA  
+
+**Sequence of Events:**  
+At approximately 14:45 local time, a Bombardier Global 6000, registered N712AB, was cruising at an altitude of 30,000 feet. The flight was uneventful until the crew received an alert indicating a cabin pressurization fault. The pilot-in-command (PIC) promptly initiated emergency procedures, descending to 10,000 feet to stabilize cabin pressure.
+
+During the descent, the oxygen masks automatically deployed, and the cabin crew instructed passengers to don the masks. The PIC communicated with air traffic control (ATC) to declare an emergency and requested an immediate return to Denver International Airport (DEN). The aircraft descended rapidly, maintaining communication with ATC throughout the procedure.
+
+By 14:55, the aircraft leveled off at 10,000 feet, allowing the cabin pressure to stabilize. The crew performed a thorough check of the pressurization system and confirmed that the cabin was maintaining a safe environment. After assessing the situation, the PIC continued the flight towards DEN and landed safely at 15:20.
+
+**Findings:**  
+Post-incident inspection revealed a malfunction in the cabin pressure control valve, which had failed to regulate the cabin pressure correctly at high altitude. Maintenance records indicated that the valve had been previously serviced, but no issues were reported before the flight.
+
+**Probable Cause:**  
+A malfunction in the cabin pressure control valve led to the pressurization fault at high altitude.

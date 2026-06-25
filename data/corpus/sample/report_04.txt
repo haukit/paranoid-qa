@@ -1,0 +1,20 @@
+**Incident Report: Regional Turboprop Runway Excursion**
+
+**Registration:** N432AT  
+**Date:** April 15, 2023  
+**Location:** Maplewood Regional Airport (MAP), Maplewood, TX  
+
+**Sequence of Events:**  
+On April 15, 2023, at approximately 14:30 CST, a Bombardier Q400, registered N432AT, was conducting a scheduled flight from Maplewood Regional Airport to Hillcrest International Airport. The weather at MAP at the time of departure was reported as overcast skies with gusting winds from the northwest at 25 knots, with gusts reaching 35 knots.  
+
+As the aircraft approached Runway 27 for takeoff, the flight crew communicated their concerns regarding the crosswind conditions. The captain decided to proceed with the takeoff after assessing the aircraft's performance capabilities. During the takeoff roll, the aircraft encountered a sudden gust of wind, causing it to veer off the runway to the left. The crew attempted to regain control; however, the aircraft exited the paved surface and came to rest in the grass adjacent to the runway.  
+
+No injuries were reported among the 32 passengers and 4 crew members onboard, but the aircraft sustained damage to the left main landing gear and the left wingtip.  
+
+**Findings:**  
+- The aircraft was properly configured for takeoff, and the flight crew had conducted a thorough pre-flight briefing.  
+- The wind conditions exceeded the aircraft's demonstrated crosswind limit.  
+- The flight crew's decision to take off in adverse weather conditions contributed to the incident.
+
+**Probable Cause:**  
+The runway excursion was caused by the flight crew's decision to take off in strong gusting crosswind conditions beyond the aircraft's operational limits.

@@ -5,9 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CORPUS_DIR = Path(
-    os.getenv("PARANOID_QA_CORPUS", PROJECT_ROOT / "data" / "corpus" / "refund_policy")
-)
+CORPUS_DIR = Path(os.getenv("PARANOID_QA_CORPUS", PROJECT_ROOT / "data" / "corpus" / "sample"))
 STORAGE_DIR = PROJECT_ROOT / ".storage"  # persisted vector index (gitignored)
 
 
@@ -17,7 +15,9 @@ class Settings:
     embed_provider: str = "openai"
 
     gen_model: str = "gpt-4o-mini"  # the generator (local: "qwen3.5:9b")
-    critic_model: str = "gpt-4o-mini"  # use a different family for real decorrelation (local: "gemma4:12b")
+    critic_model: str = (
+        "gpt-4o-mini"  # use a different family for real decorrelation (local: "gemma4:12b")
+    )
     embed_model: str = "text-embedding-3-small"  # local: "bge-m3"
 
     top_k: int = 10  # candidates retrieved (dense + BM25) before reranking
