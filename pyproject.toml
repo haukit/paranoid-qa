@@ -23,6 +23,9 @@ ollama = ["langchain-ollama>=0.2", "llama-index-llms-ollama>=0.3", "llama-index-
 anthropic = ["langchain-anthropic>=0.2"]
 cohere = ["langchain-cohere>=0.3", "llama-index-embeddings-cohere>=0.2"]
 rerank = ["sentence-transformers"]
+eval = [
+    "arize-phoenix>=17.11.0",
+]
 
 [build-system]
 requires = ["hatchling"]
