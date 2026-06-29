@@ -10,24 +10,41 @@ Two stages per claim:
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import cast
+
+from rapidfuzz import fuzz
 
 from paranoid_qa.config import settings
 from paranoid_qa.models import make_structured_llm
 from paranoid_qa.schemas import Claim, ClaimVerdict, GraphState, RetrievedChunk, Source
 
+_QUOTE_MATCH_THRESHOLD = 90  # rapidfuzz partial_ratio
+_ELLIPSIS = re.compile(r"\s*(?:\.\.\.|…)\s*")
+
 
 def _normalize(text: str) -> str:
-    "Collapse consecutive whitespace to single spaces."
+    "Lowercase, NFKC-normalise unicode, and collapse whitespace."
+    text = unicodedata.normalize("NFKC", text).lower()
     return re.sub(r"\s+", " ", text).strip()
 
 
 def locate_quote(quote: str, chunks: list[RetrievedChunk]) -> RetrievedChunk | None:
-    nq = _normalize(quote)
-    if not nq:
+    """Return the chunk that contains `quote` (fuzzy matching).
+
+    The quote is split on ellipses into segments, each segment is normalised
+    (case / unicode / whitespace), and each must fuzzy-match a span of the chunk
+    (partial_ratio >= threshold)."""
+
+    segments = [s for s in (_normalize(seg) for seg in _ELLIPSIS.split(quote)) if s]
+    if not segments:
         return None
     for chunk in chunks:
-        if nq in _normalize(chunk["text"]):
+        chunk_test = _normalize(chunk["text"])
+        all_segments_present = all(
+            fuzz.partial_ratio(seg, chunk_test) >= _QUOTE_MATCH_THRESHOLD for seg in segments
+        )
+        if all_segments_present:
             return chunk
     return None
 
