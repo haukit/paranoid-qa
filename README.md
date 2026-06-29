@@ -104,6 +104,24 @@ Across 106 triples:
 
 One claim was a false positive: a `contradicted` claim, "the NTSB recommended banning open-door flights with harnesses that are easy to release", was accepted as supported. The source bans the hard-to-release harnesses and exempts the easy-to-release ones, so it contradicts the claim. The critic matched on the shared topic and missed the inversion; its explanation even quoted the clause that refutes the claim.
 
+### Self-verification ablation (specific path)
+
+The question now is whether the verification node actually lowers the rate of ungrounded claims reaching the user.
+
+I measured it as an ablation (`evals/verification_ablation.py`, gated by a `verify_enabled` toggle on the graph): run the specific path over the answerable questions twice, once with the verify/revise loop off and once on, and compare the fabrication rate, where a claim counts as fabricated if its quote cannot be located in the retrieved chunks.
+
+I reused the questions from the retrieval eval above, since they are known to be answerable from the corpus, so any fabrication is the generator's fault rather than missing evidence.
+
+| mode | fabricated / total |
+|------|-------|
+| loop off | 1 / 80 |
+| loop on  | 1 / 80 |
+
+The loop makes no measurable difference. Observations:
+- The one failure in both loop off and loop on cases is the same. Asked for the NTSB's recommendation on weather minimums for Ketchikan air tours, the system gave the correct answer but spelled out an abbreviation in its quote: the source reads "develop and issue an SFAR", while the quote expanded it to "a special federal aviation regulation" (which is what SFAR stands for). The meaning is identical, but it is no longer a word-for-word copy, so the quote cannot be located in the source and is counted as fabricated. This is a near-miss on copying, not an invented fact, which is why both modes report it identically.
+- On answerable, single-hop questions the generator rarely fabricates, so there is little for the critic to catch.
+- The eval set used isn't adversarial / an unanswerable set in the first place, where fabrication is more common.
+
 ## TODO
 
 - Router: add few-shot examples to reduce phrasing-sensitive misroutes (e.g. "which report involves X" vs "how many reports involve X").
