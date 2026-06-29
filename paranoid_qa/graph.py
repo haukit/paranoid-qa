@@ -2,7 +2,7 @@
 
 START -> route
     -> "specific" -> retrieve -> grade
-        -> "yes" -> generate -> verify -> accept|revise|re_retrieve
+        -> "yes" -> generate -> verify -> accept|revise
         -> "no"  -> rewrite -> retrieve
     -> "aggregate" -> aggregate -> verify -> accept (END)
 
@@ -40,15 +40,13 @@ def _verify_route(state: GraphState) -> str:
         # No corrective loop on the aggregate path (no quotes to re-retrieve / regenerate) ->
         # return best-effort answer; faithful=False is still recorded for the caller.
         return "accept"
-    if any(v.verdict == "fabricated" for v in state["verdicts"]):
-        # Quotes are not in the docs -> get docs again
-        return "re_retrieve"
 
-    # Quotes real but do not support claim -> regenerate
+    # Specific path: retrieval quality is already gated by `grade`, so any unfaithful verdict
+    # is a generation fault -> regenerate with feedback.
     return "revise"
 
 
-def build_graph():
+def build_graph(verify_enabled: bool = True):
     g = StateGraph(GraphState)
 
     g.add_node("route", route)
@@ -65,24 +63,25 @@ def build_graph():
         "route", lambda s: s["route"], {"specific": "retrieve", "aggregate": "aggregate"}
     )
 
-    # specific path
+    # prompt rewrite in specific path
     g.add_edge("retrieve", "grade")
     g.add_conditional_edges("grade", _decide, {"generate": "generate", "rewrite": "rewrite"})
     g.add_edge("rewrite", "retrieve")
-    g.add_edge("generate", "verify")
-
-    # aggregate path
-    g.add_edge("aggregate", "verify")
 
     # verify + correction routing
-    g.add_conditional_edges(
-        "verify",
-        _verify_route,
-        {
-            "accept": END,
-            "revise": "generate",  # back to the generator, same docs
-            "re_retrieve": "retrieve",  # back to retrieval for fresh docs
-        },
-    )
+    if verify_enabled:
+        g.add_edge("generate", "verify")
+        g.add_edge("aggregate", "verify")
+        g.add_conditional_edges(
+            "verify",
+            _verify_route,
+            {
+                "accept": END,
+                "revise": "generate",  # back to the generator, same docs
+            },
+        )
+    else:
+        g.add_edge("generate", END)
+        g.add_edge("aggregate", END)
 
     return g.compile()
