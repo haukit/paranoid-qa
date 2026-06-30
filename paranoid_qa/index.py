@@ -67,3 +67,7 @@ class _RerankingRetriever:
     def retrieve(self, query: str):
         nodes = self._base.retrieve(query)
         return self._reranker.postprocess_nodes(nodes, query_bundle=QueryBundle(query))
+
+    async def aretrieve(self, query: str):
+        nodes = await self._base.aretrieve(query)
+        return await self._reranker.apostprocess_nodes(nodes, query_bundle=QueryBundle(query))

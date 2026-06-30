@@ -4,6 +4,7 @@ final-answer fabrication rate?"""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -57,7 +58,7 @@ def main() -> None:
             mode = "on" if verify_enabled else "off"
             app = build_graph(verify_enabled=verify_enabled)
             for q in questions:
-                rec = record(q, mode, app.invoke({"question": q}))
+                rec = record(q, mode, asyncio.run(app.ainvoke({"question": q})))
                 records.append(rec)
                 f.write(json.dumps(rec) + "\n")
                 f.flush()

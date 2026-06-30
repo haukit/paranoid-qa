@@ -9,6 +9,7 @@ supported-vs-not).
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections import Counter
 from pathlib import Path
@@ -34,7 +35,7 @@ def task(input) -> dict:
         "document": input["document"],
         "page": input["page"],
     }
-    v = verify_claim(claim, [chunk])
+    v = asyncio.run(verify_claim(claim, [chunk]))
     return {"verdict": v.verdict, "explanation": v.explanation}
 
 

@@ -37,9 +37,9 @@ def _format_chunks(chunks: list[RetrievedChunk]) -> str:
     return "\n\n---\n\n".join(c["text"] for c in chunks)
 
 
-def retrieve(state: GraphState) -> GraphState:
+async def retrieve(state: GraphState) -> GraphState:
     """Fetch candidate chunks for the question"""
-    nodes = get_retriever().retrieve(state["question"])
+    nodes = await get_retriever().aretrieve(state["question"])
     chunks: list[RetrievedChunk] = [
         {
             "text": n.text,
@@ -51,7 +51,7 @@ def retrieve(state: GraphState) -> GraphState:
     return {"chunks": chunks}
 
 
-def grade(state: GraphState) -> GraphState:
+async def grade(state: GraphState) -> GraphState:
     """Judge whether the retrieved docs are good enough to answer"""
     question = state["question"]
     context = _format_chunks(state["chunks"])
@@ -61,18 +61,18 @@ def grade(state: GraphState) -> GraphState:
         ("system", GRADE_SYSTEM),
         ("human", f"Documents:\n{context}\n\nQuestion: {question}"),
     ]
-    result = cast(Grade, grader.invoke(messages))
+    result = cast(Grade, await grader.ainvoke(messages))
     return {"grade": "yes" if result.relevant else "no"}
 
 
-def rewrite(state: GraphState) -> GraphState:
+async def rewrite(state: GraphState) -> GraphState:
     """Reformulate the question for another retrieval pass; count the attempt."""
     llm = make_llm()
     messages = [
         ("system", REWRITE_SYSTEM),
         ("human", f"Original question: {state['question']}\n\nRewritten question:"),
     ]
-    rewritten = str(llm.invoke(messages).content)
+    rewritten = str((await llm.ainvoke(messages)).content)
     return {"question": rewritten, "attempts": state.get("attempts", 0) + 1}
 
 
@@ -92,7 +92,7 @@ def _feedback(state: GraphState) -> str:
     return REVISE_GUIDANCE + "\n\nRejected claims:\n" + "\n".join(rejected)
 
 
-def generate(state: GraphState) -> GraphState:
+async def generate(state: GraphState) -> GraphState:
     """Produce a grounded Answer (claims + verbatim quotes) from chunks,
     incorporating critic feedback on a revise pass."""
     question = state["question"]
@@ -109,5 +109,5 @@ def generate(state: GraphState) -> GraphState:
         ("system", GENERATE_SYSTEM),
         ("human", human),
     ]
-    answer = structured.invoke(messages)
+    answer = await structured.ainvoke(messages)
     return {"answer": cast(Answer, answer)}

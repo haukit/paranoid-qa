@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 
 from paranoid_qa.graph import build_graph
@@ -14,7 +15,7 @@ def main() -> None:
     question = sys.argv[1]
 
     app = build_graph()
-    result = app.invoke({"question": question})
+    result = asyncio.run(app.ainvoke({"question": question}))
     answer = result["answer"]
 
     print(answer.text, "\n")

@@ -39,6 +39,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 from pathlib import Path
 
@@ -55,12 +56,12 @@ def run_case(case: dict) -> dict:
             "document": case["document"],
             "page": case["page"],
         }
-        verdict = verify_claim(claim, [chunk])
+        verdict = asyncio.run(verify_claim(claim, [chunk]))
         is_gate = case["gold"] == "fabricated"
     else:  # aggregate-path case
         claim = Claim(text=case["answer"])  # no quote
         references = [Source(document=d) for d in case["references"]]
-        verdict = verify_claim(claim, [], case["context"], references)
+        verdict = asyncio.run(verify_claim(claim, [], case["context"], references))
         is_gate = not case["references"]
     return {
         "id": case["id"],

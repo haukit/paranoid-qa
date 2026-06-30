@@ -16,12 +16,12 @@ ROUTER_SYSTEM = """Classify the user's question into one of two strategies.
 Choose "aggregate" only when answering requires looking across the whole corpus at once."""
 
 
-def route(state: GraphState) -> GraphState:
+async def route(state: GraphState) -> GraphState:
     """Classify the question."""
     classifier = make_structured_llm(Route)
     messages = [
         ("system", ROUTER_SYSTEM),
         ("human", state["question"]),
     ]
-    result = cast(Route, classifier.invoke(messages))
+    result = cast(Route, await classifier.ainvoke(messages))
     return {"route": result.kind}

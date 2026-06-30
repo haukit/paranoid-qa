@@ -61,7 +61,7 @@ Choose exactly one verdict:
 Give a one-sentence explanation."""
 
 
-def verify_claim(
+async def verify_claim(
     claim: Claim,
     chunks: list[RetrievedChunk],
     context: str = "",
@@ -90,7 +90,7 @@ def verify_claim(
             ("system", CRITIC_SYSTEM),
             ("human", f"SOURCE:\n{located['text']}\n\nCLAIM: {claim.text}\n\nQUOTE: {claim.quote}"),
         ]
-        verdict = cast(ClaimVerdict, critic.invoke(messages))
+        verdict = cast(ClaimVerdict, await critic.ainvoke(messages))
         verdict.source = source
         return verdict
 
@@ -102,14 +102,14 @@ def verify_claim(
         ("system", AGGREGATE_CRITIC_SYSTEM),
         ("human", f"SOURCE CONTENT:\n{context}\n\nCLAIM: {claim.text}"),
     ]
-    return cast(ClaimVerdict, critic.invoke(messages))
+    return cast(ClaimVerdict, await critic.ainvoke(messages))
 
 
-def verify(state: GraphState) -> GraphState:
+async def verify(state: GraphState) -> GraphState:
     """Graph node: run the critic over every claim and flag faithfulness"""
     answer = state["answer"]
     verdicts = [
-        verify_claim(c, state.get("chunks", []), state.get("context", ""), answer.references)
+        await verify_claim(c, state.get("chunks", []), state.get("context", ""), answer.references)
         for c in answer.claims
     ]
     faithful = all(v.verdict == "supported" for v in verdicts)
