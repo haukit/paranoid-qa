@@ -9,10 +9,15 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
+from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
+from opentelemetry import trace
 from pydantic import BaseModel
 
 from paranoid_qa.graph import build_graph
+from paranoid_qa.tracing import setup_tracing
 
+setup_tracing()
+_tracer = trace.get_tracer("paranoid-qa")
 app = FastAPI(title="paranoid-qa")
 graph = build_graph()
 
@@ -43,29 +48,39 @@ def _progress(node: str, update: dict) -> dict:
 
 async def _run(question: str) -> AsyncIterator[str]:
     state = {}
-    async for chunk in graph.astream({"question": question}, stream_mode="updates"):
-        for node, update in chunk.items():
-            yield _sse("progress", _progress(node, update))
-            state.update(update)
+    with _tracer.start_as_current_span("ask") as span:
+        span.set_attribute(
+            SpanAttributes.OPENINFERENCE_SPAN_KIND, OpenInferenceSpanKindValues.CHAIN.value
+        )
+        span.set_attribute(SpanAttributes.INPUT_VALUE, question)
+        span.set_attribute("question", question)
 
-    answer = state.get("answer")
-    verdicts = state.get("verdicts") or []
-    claims = [
-        {
-            "text": c.text,
-            "quote": c.quote,
-            "citation": str(v.source) if v.source is not None else None,
-        }
-        for c, v in zip(answer.claims if answer else [], verdicts)
-    ]
-    yield _sse(
-        "answer",
-        {
+        async for chunk in graph.astream({"question": question}, stream_mode="updates"):
+            for node, update in chunk.items():
+                yield _sse("progress", _progress(node, update))
+                state.update(update)
+
+        answer = state.get("answer")
+        verdicts = state.get("verdicts") or []
+        claims = [
+            {
+                "text": c.text,
+                "quote": c.quote,
+                "citation": str(v.source) if v.source is not None else None,
+            }
+            for c, v in zip(answer.claims if answer else [], verdicts)
+        ]
+
+        payload = {
             "answer": answer.text if answer else "",
             "claims": claims,
             "faithful": state.get("faithful", False),
-        },
-    )
+        }
+        span.set_attribute(SpanAttributes.OUTPUT_VALUE, json.dumps(payload))
+        span.set_attribute(SpanAttributes.OUTPUT_MIME_TYPE, "application/json")
+        span.set_attribute("faithful", bool(state.get("faithful", False)))
+
+        yield _sse("answer", payload)
 
 
 @app.post("/ask")

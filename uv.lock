@@ -3205,6 +3205,41 @@ wheels = [
 ]
 
 [[package]]
+name = "openinference-instrumentation-langchain"
+version = "0.1.66"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "openinference-instrumentation" },
+    { name = "openinference-semantic-conventions" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-semantic-conventions" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7b/ac/8f67854dd90a4ab717f4377a3f6b01753cc2873c5ce1cc04f4c294606808/openinference_instrumentation_langchain-0.1.66.tar.gz", hash = "sha256:2f567b0b099f2e96de3ddd32696d3afd14cea2bb7af4c19f8b72a6c5fd2af576", size = 75639, upload-time = "2026-05-18T18:51:35.713Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/cf/0e4cc81ae8d9b504aa7f2942565a86d185f4c6c7206ad1e30bf4ac643274/openinference_instrumentation_langchain-0.1.66-py3-none-any.whl", hash = "sha256:f10c9bda4d2877583c35d5d55e3ca22de78917a1cdbe2cfe4da75312ea51840f", size = 24840, upload-time = "2026-05-18T18:51:34.384Z" },
+]
+
+[[package]]
+name = "openinference-instrumentation-llama-index"
+version = "4.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "openinference-instrumentation" },
+    { name = "openinference-semantic-conventions" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-semantic-conventions" },
+    { name = "typing-extensions" },
+    { name = "wrapt" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/e8/8ca57d857c8229b0865c61b461a4b9a5a4ba17f6760870b11c599d3b1e3a/openinference_instrumentation_llama_index-4.4.3.tar.gz", hash = "sha256:ca20acd257a0f19a51bf84760e58c176ce14cd9c5a63bfaffaf67fa55f9d39e9", size = 63173, upload-time = "2026-06-30T06:07:56.344Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/bd/babbf01e8a2b12d070bb4d93c4219a886c08e6dc53cc39bcef49cb0719a1/openinference_instrumentation_llama_index-4.4.3-py3-none-any.whl", hash = "sha256:e0efb7fd0d28af161509ecc77325688afb6e4bce2053237c9578ce16842fe6e2", size = 29797, upload-time = "2026-06-30T06:07:55.017Z" },
+]
+
+[[package]]
 name = "openinference-instrumentation-openai"
 version = "0.1.52"
 source = { registry = "https://pypi.org/simple" }
@@ -3608,13 +3643,17 @@ rerank = [
     { name = "sentence-transformers" },
 ]
 serve = [
+    { name = "arize-phoenix-otel" },
     { name = "fastapi" },
+    { name = "openinference-instrumentation-langchain" },
+    { name = "openinference-instrumentation-llama-index" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "arize-phoenix", marker = "extra == 'eval'", specifier = ">=17.11.0" },
+    { name = "arize-phoenix-otel", marker = "extra == 'serve'", specifier = ">=0.16.1" },
     { name = "fastapi", marker = "extra == 'serve'", specifier = ">=0.138.0" },
     { name = "langchain-anthropic", marker = "extra == 'anthropic'", specifier = ">=0.2" },
     { name = "langchain-cohere", marker = "extra == 'cohere'", specifier = ">=0.3" },
@@ -3630,6 +3669,8 @@ requires-dist = [
     { name = "llama-index-llms-openai", specifier = ">=0.2" },
     { name = "llama-index-readers-file", specifier = ">=0.2" },
     { name = "llama-index-retrievers-bm25", specifier = ">=0.4" },
+    { name = "openinference-instrumentation-langchain", marker = "extra == 'serve'", specifier = ">=0.1.66" },
+    { name = "openinference-instrumentation-llama-index", marker = "extra == 'serve'", specifier = ">=4.4.3" },
     { name = "pycryptodome", specifier = ">=3.20" },
     { name = "pydantic", specifier = ">=2.6" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },

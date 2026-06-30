@@ -28,7 +28,10 @@ eval = [
     "arize-phoenix>=17.11.0",
 ]
 serve = [
+    "arize-phoenix-otel>=0.16.1",
     "fastapi>=0.138.0",
+    "openinference-instrumentation-langchain>=0.1.66",
+    "openinference-instrumentation-llama-index>=4.4.3",
     "uvicorn[standard]>=0.49.0",
 ]
 
