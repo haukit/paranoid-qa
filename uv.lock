@@ -3628,6 +3628,7 @@ cohere = [
     { name = "llama-index-embeddings-cohere" },
 ]
 dev = [
+    { name = "httpx" },
     { name = "pytest" },
     { name = "ruff" },
 ]
@@ -3655,6 +3656,7 @@ requires-dist = [
     { name = "arize-phoenix", marker = "extra == 'eval'", specifier = ">=17.11.0" },
     { name = "arize-phoenix-otel", marker = "extra == 'serve'", specifier = ">=0.16.1" },
     { name = "fastapi", marker = "extra == 'serve'", specifier = ">=0.138.0" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.1" },
     { name = "langchain-anthropic", marker = "extra == 'anthropic'", specifier = ">=0.2" },
     { name = "langchain-cohere", marker = "extra == 'cohere'", specifier = ">=0.3" },
     { name = "langchain-ollama", marker = "extra == 'ollama'", specifier = ">=0.2" },

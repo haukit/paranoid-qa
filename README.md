@@ -2,7 +2,7 @@
 
 A grounded, self-verifying question-answering service over a document corpus.
 
-Every answer is decomposed into atomic claims, each backed by a verbatim quote from the sources. A separate critic (a different model), excluded from the generator's reasoning,  independently verifies that each quote (a) actually exists in the retrieved documents and (b) genuinely supports its claim, attaching the source citation (document + page). Unsupported claims are regenerated; fabricated quotes trigger re-retrieval. All correction loops are bounded by a retry budget.
+Every answer is decomposed into atomic claims, each backed by a verbatim quote from the sources. A separate critic (a different model), excluded from the generator's reasoning,  independently verifies that each quote (a) actually exists in the retrieved documents and (b) genuinely supports its claim, attaching the source citation (document + page). Unsupported or fabricated claims are regenerated with the critic's feedback. All correction loops are bounded by a retry budget.
 
 Stack: LangGraph (orchestration), LlamaIndex (hybrid retrieval + reranking), LightRAG (graph-based corpus-level retrieval), Pydantic (typed structured outputs), OpenAI (also supports local models via Ollama)
 
@@ -31,7 +31,6 @@ START -> route
         -> "yes" -> generate -> verify
             -> accept       -> END
             -> revise       -> generate
-            -> re_retrieve  -> retrieve
         -> "no"  -> rewrite -> retrieve
     -> "aggregate" -> lightrag -> verify_aggregate -> END
 ```
@@ -122,12 +121,34 @@ The loop makes no measurable difference. Observations:
 - On answerable, single-hop questions the generator rarely fabricates, so there is little for the critic to catch.
 - The eval set used isn't adversarial / an unanswerable set in the first place, where fabrication is more common.
 
+## Serving and scaling
+
+The graph runs behind an async FastAPI `/ask` endpoint that streams progress through the graph (route, retrieve, grade, generate, verify) and then the grounded answer over Server-Sent Events. Every run is traced into Phoenix for per-call latency and cost.
+
+I load-tested the endpoint with a concurrency sweep (`scripts/load_test.py`) where I ran through the same dataset of questions used in the retrieval eval but at increasing concurrency:
+
+| concurrency | p50 (s) | p95 (s) | req/s | errors |
+|-------------|---------|---------|-------|--------|
+| 1 | 12.61 | 24.80 | 0.07 | 0 |
+| 2 | 12.90 | 24.47 | 0.13 | 0 |
+| 4 | 16.33 | 26.28 | 0.22 | 0 |
+| 8 | 26.94 | 45.74 | 0.27 | 0 |
+
+The `errors` column counts requests that hit a provider rate limit; it is zero at every level, so nothing was throttled and the saturation behaviour stands out clearly:
+- c=1→2: throughput nearly doubles (0.07→0.13), latency flat.
+- c=2→4: throughput +70% (0.13→0.22), latency creeps up.
+- c=4→8: throughput only +23% (0.22→0.27), but latency doubles (16→27s p50, 26→46s p95).
+
+One possible improvement is to cache the retriever, since it is rebuilt on every request (the index is reloaded from disk and the BM25 retriever reconstructed).
+
+Token usage and cost: Each query averages 13300 prompt and 270 completion tokens, ~$0.0016 at gpt-4o-mini rates (about $1.60 per 1,000 queries). Cost is dominated by input tokens (48:1 prompt-to-completion ratio). This can be attributed to the RAG system that re-sends retrieved context as input on every call, while emitting short structured outputs.
+
 ## TODO
 
 - Router: add few-shot examples to reduce phrasing-sensitive misroutes (e.g. "which report involves X" vs "how many reports involve X").
 - Retrieval recall: raise `rerank_top_n` / `top_k`, or swap the LLM reranker for a cross-encoder (should be faster).
-- Rewrite node: anchor to the original question, show the rejected docs, keep a rewrite history; route `re_retrieve` through reformulation so it fetches different chunks.
+- Rewrite node: anchor to the original question, show the rejected docs, keep a rewrite history.
 - Aggregate eval: rephrase questions to be more unambiguous and grade on the cited references rather than prose substrings.
 - `verify_aggregate`: add an LLM entailment pass (does the answer follow from the cited documents?) on top of reference existence.
 - Evaluation: generation faithfulness / answer relevance (LLM-judge), multi-hop retrieval with NDCG, the candidate-ceiling Recall@10, and harder critic negatives (more "unless"-style inversions).
-- Serving: FastAPI `/ask` endpoint, Phoenix tracing, Dockerfile.
+- Serving: Dockerfile and container deployment.
