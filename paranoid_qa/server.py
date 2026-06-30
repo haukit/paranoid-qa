@@ -5,6 +5,7 @@ Run: uv run uvicorn paranoid_qa.server:app --reload"""
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
@@ -16,7 +17,9 @@ from pydantic import BaseModel
 from paranoid_qa.graph import build_graph
 from paranoid_qa.tracing import setup_tracing
 
-setup_tracing()
+if os.getenv("PHOENIX_COLLECTOR_ENDPOINT"):
+    setup_tracing()
+
 _tracer = trace.get_tracer("paranoid-qa")
 app = FastAPI(title="paranoid-qa")
 graph = build_graph()
