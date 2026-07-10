@@ -12,11 +12,10 @@ from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc
 from llama_index.core import SimpleDirectoryReader
 
-from paranoid_qa.config import CORPUS_DIR, PROJECT_ROOT, settings
+from paranoid_qa.config import CORPUS_DIR, LIGHTRAG_DIR, settings
 from paranoid_qa.models import make_structured_llm
 from paranoid_qa.schemas import Answer, Claim, GraphState, Source
 
-LIGHTRAG_DIR = PROJECT_ROOT / ".lightrag"  # persisted graph
 _EMBED_DIM, _EMBED_MAX_TOKENS = 1536, 8191  # text-embedding-3-small
 
 
