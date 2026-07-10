@@ -7,13 +7,15 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from paranoid_qa.config import settings
 from paranoid_qa.graph import build_graph
 from paranoid_qa.tracing import setup_tracing
 
@@ -26,7 +28,51 @@ graph = build_graph()
 
 
 class AskRequest(BaseModel):
-    question: str
+    question: str = Field(min_length=3, max_length=settings.max_query_chars)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz():
+    if settings.provider == "stub":
+        return {"status": "ready", "mode": "stub"}
+
+    missing = []
+    if not Path(settings.storage).exists():
+        missing.append(str(settings.storage))
+    if not Path(settings.lightrag_dir).exists():
+        missing.append(str(settings.lightrag_dir))
+
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail={"message": "Index artifacts are missing", "missing": missing},
+        )
+
+    return {
+        "status": "ready",
+        "storage": str(settings.storage),
+        "lightrag_dir": str(settings.lightrag_dir),
+        "provider": settings.provider,
+        "embed_provider": settings.embed_provider,
+    }
+
+
+@app.get("/version")
+def version():
+    return {
+        "app": "paranoid-qa",
+        "version": "0.1.0",
+        "provider": settings.provider,
+        "gen_model": settings.gen_model,
+        "critic_model": settings.critic_model,
+        "embed_model": settings.embed_model,
+        "demo_access_required": settings.demo_require_access,
+    }
 
 
 def _sse(event: str, data: dict) -> str:
