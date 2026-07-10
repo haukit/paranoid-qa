@@ -8,6 +8,13 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev --extra serve
 
+# prebuilt index artifact from a GitHub Release
+ARG INDEX_RELEASE=ntsb-demo-v1
+ADD --checksum=sha256:adb4f000b9047ed0893595316ea4533efc346b8cd69dc91eed75491ee6f4e2a5 \
+    https://github.com/haukit/paranoid-qa/releases/download/${INDEX_RELEASE}/ntsb-demo-index.tar.gz \
+    /tmp/index.tar.gz
+RUN mkdir -p /artifacts && tar -xzf /tmp/index.tar.gz -C /artifacts && rm /tmp/index.tar.gz
+
 # ---- runtime: slim image with venv + source + prebuilt index ----
 FROM python:3.12-slim
 WORKDIR /app
@@ -15,7 +22,8 @@ ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY paranoid_qa ./paranoid_qa
-COPY .storage ./.storage
+COPY --from=builder /artifacts/.storage ./.storage
+COPY --from=builder /artifacts/.lightrag ./.lightrag
 
 RUN useradd -m -u 1000 app && chown -R app /app
 USER app
