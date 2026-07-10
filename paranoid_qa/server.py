@@ -138,8 +138,21 @@ def _build_payload(state: dict) -> dict:
     }
 
 
+def _stub_payload() -> dict:
+    """Deterministic fake answer for stub-mode deployment; no graph or model run."""
+    return {
+        "answer": "This is a stub answer used for deployment testing.",
+        "claims": [],
+        "faithful": True,
+    }
+
+
 async def _run(question: str) -> AsyncIterator[str]:
     """Stream one QA run as SSE progress frames followed by a final answer frame."""
+    if settings.provider == "stub":
+        yield _sse("answer", _stub_payload())
+        return
+
     state = {}
     with _ask_span(question) as span:
         async for chunk in graph.astream({"question": question}, stream_mode="updates"):
@@ -155,6 +168,9 @@ async def _run(question: str) -> AsyncIterator[str]:
 
 async def _run_to_payload(question: str) -> dict:
     """Run one QA run to completion and return the final JSON payload."""
+    if settings.provider == "stub":
+        return _stub_payload()
+
     with _ask_span(question) as span:
         state = await graph.ainvoke({"question": question})
         payload = _build_payload(state)
