@@ -50,6 +50,9 @@ line-length = 100
 
 [tool.pyright]
 reportTypedDictNotRequiredAccess = false
+# Type-check only the shipped package and its tests, exclude evals/ and scripts/
+# that depend on the `eval` extra (arize-phoenix).
+include = ["paranoid_qa", "tests"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
