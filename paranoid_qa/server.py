@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -25,6 +26,28 @@ if os.getenv("PHOENIX_COLLECTOR_ENDPOINT"):
 _tracer = trace.get_tracer("paranoid-qa")
 app = FastAPI(title="paranoid-qa")
 graph = build_graph()
+
+
+@contextmanager
+def _ask_span(question: str):
+    """Open the span for one QA run, with the question as its input attribute.
+
+    Yields the span so the caller can attach output attributes before it closes."""
+    with _tracer.start_as_current_span("ask") as span:
+        span.set_attribute(
+            SpanAttributes.OPENINFERENCE_SPAN_KIND, OpenInferenceSpanKindValues.CHAIN.value
+        )
+        span.set_attribute(SpanAttributes.INPUT_VALUE, question)
+        span.set_attribute("question", question)
+
+        yield span
+
+
+def _record_output(span, payload: dict) -> None:
+    """Record the final payload and its faithfulness as output attributes on the span."""
+    span.set_attribute(SpanAttributes.OUTPUT_VALUE, json.dumps(payload))
+    span.set_attribute(SpanAttributes.OUTPUT_MIME_TYPE, "application/json")
+    span.set_attribute("faithful", bool(payload.get("faithful", False)))
 
 
 class AskRequest(BaseModel):
@@ -95,43 +118,55 @@ def _progress(node: str, update: dict) -> dict:
     return data
 
 
-async def _run(question: str) -> AsyncIterator[str]:
-    state = {}
-    with _tracer.start_as_current_span("ask") as span:
-        span.set_attribute(
-            SpanAttributes.OPENINFERENCE_SPAN_KIND, OpenInferenceSpanKindValues.CHAIN.value
-        )
-        span.set_attribute(SpanAttributes.INPUT_VALUE, question)
-        span.set_attribute("question", question)
+def _build_payload(state: dict) -> dict:
+    """Collapse the final graph state into the JSON response."""
+    answer = state.get("answer")
+    verdicts = state.get("verdicts") or []
+    claims = [
+        {
+            "text": c.text,
+            "quote": c.quote,
+            "citation": str(v.source) if v.source is not None else None,
+        }
+        for c, v in zip(answer.claims if answer else [], verdicts)
+    ]
 
+    return {
+        "answer": answer.text if answer else "",
+        "claims": claims,
+        "faithful": state.get("faithful", False),
+    }
+
+
+async def _run(question: str) -> AsyncIterator[str]:
+    """Stream one QA run as SSE progress frames followed by a final answer frame."""
+    state = {}
+    with _ask_span(question) as span:
         async for chunk in graph.astream({"question": question}, stream_mode="updates"):
             for node, update in chunk.items():
                 yield _sse("progress", _progress(node, update))
                 state.update(update)
 
-        answer = state.get("answer")
-        verdicts = state.get("verdicts") or []
-        claims = [
-            {
-                "text": c.text,
-                "quote": c.quote,
-                "citation": str(v.source) if v.source is not None else None,
-            }
-            for c, v in zip(answer.claims if answer else [], verdicts)
-        ]
-
-        payload = {
-            "answer": answer.text if answer else "",
-            "claims": claims,
-            "faithful": state.get("faithful", False),
-        }
-        span.set_attribute(SpanAttributes.OUTPUT_VALUE, json.dumps(payload))
-        span.set_attribute(SpanAttributes.OUTPUT_MIME_TYPE, "application/json")
-        span.set_attribute("faithful", bool(state.get("faithful", False)))
+        payload = _build_payload(state)
+        _record_output(span, payload)
 
         yield _sse("answer", payload)
+
+
+async def _run_to_payload(question: str) -> dict:
+    """Run one QA run to completion and return the final JSON payload."""
+    with _ask_span(question) as span:
+        state = await graph.ainvoke({"question": question})
+        payload = _build_payload(state)
+        _record_output(span, payload)
+        return payload
 
 
 @app.post("/ask")
 async def ask(req: AskRequest) -> StreamingResponse:
     return StreamingResponse(_run(req.question), media_type="text/event-stream")
+
+
+@app.post("/ask_json")
+async def ask_json(req: AskRequest) -> dict:
+    return await _run_to_payload(req.question)
