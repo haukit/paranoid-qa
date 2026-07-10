@@ -16,6 +16,7 @@ dependencies = [
     "pydantic>=2.6",
     "lightrag-hku>=1.5.3",
     "rapidfuzz>=3.14.5",
+    "pydantic-settings>=2.14.2",
 ]
 
 [project.optional-dependencies]
