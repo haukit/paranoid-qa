@@ -20,12 +20,13 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app
 
-COPY --from=builder /app/.venv /app/.venv
-COPY paranoid_qa ./paranoid_qa
-COPY --from=builder /artifacts/.storage ./.storage
-COPY --from=builder /artifacts/.lightrag ./.lightrag
+RUN useradd -m -u 1000 app
 
-RUN useradd -m -u 1000 app && chown -R app /app
+COPY --chown=app:app --from=builder /app/.venv /app/.venv
+COPY --chown=app:app paranoid_qa ./paranoid_qa
+COPY --chown=app:app --from=builder /artifacts/.storage ./.storage
+COPY --chown=app:app --from=builder /artifacts/.lightrag ./.lightrag
+
 USER app
 
 EXPOSE 8000
