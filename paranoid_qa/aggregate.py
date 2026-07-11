@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections import defaultdict
+from functools import lru_cache
 from typing import cast
 
 from lightrag import LightRAG, QueryParam
@@ -77,9 +79,15 @@ def build_lightrag() -> None:
     _run(_build())
 
 
+@lru_cache(maxsize=1)
+def _corpus_filenames() -> tuple[str, ...]:
+    """Filenames the LightRAG graph was built from."""
+    status = json.loads((LIGHTRAG_DIR / "kv_store_doc_status.json").read_text())
+    return tuple(sorted({v["file_path"] for v in status.values() if v.get("file_path")}))
+
+
 def _references_from_context(context: str) -> list[Source]:
-    cited = sorted(f.name for f in CORPUS_DIR.glob("*") if f.is_file() and f.name in context)
-    return [Source(document=name) for name in cited]
+    return [Source(document=name) for name in _corpus_filenames() if name in context]
 
 
 DECOMPOSE_SYSTEM = """You are given an ANSWER to a corpus-level question. Break it into atomic
