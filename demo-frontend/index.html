@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paranoid QA: NTSB demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Paranoid QA</h1>
+    <p>Grounded, self-verifying QA over a corpus of NTSB aviation-accident reports.</p>
+
+    <p id="status"></p>
+
+    <form id="ask-form">
+      <input id="question" type="text" placeholder="Ask a question about the corpus..." autocomplete="off" />
+      <button id="ask-button" type="submit">Ask</button>
+    </form>
+
+    <article id="answer" hidden></article>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
