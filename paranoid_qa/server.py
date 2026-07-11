@@ -10,12 +10,13 @@ from collections.abc import AsyncIterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
+from paranoid_qa import demo
 from paranoid_qa.config import settings
 from paranoid_qa.graph import build_graph
 from paranoid_qa.tracing import setup_tracing
@@ -98,6 +99,41 @@ def version():
     }
 
 
+class DemoSessionRequest(BaseModel):
+    token: str
+
+
+@app.post("/demo/session")
+def create_demo_session(req: DemoSessionRequest) -> dict:
+    if settings.demo_disabled:
+        raise HTTPException(503, "Demo is disabled")
+    if not settings.demo_invite_code or req.token != settings.demo_invite_code:
+        raise HTTPException(401, "Invalid invite token")
+    return {
+        "session": demo.start_session(),
+        "expires_in_days": settings.demo_session_days,
+        "questions": settings.demo_questions_per_session,
+    }
+
+
+def require_demo_session(x_demo_session: str | None = Header(default=None)) -> str | None:
+    if not settings.demo_require_access:
+        return None
+    if settings.demo_disabled:
+        raise HTTPException(503, "Demo is disabled")
+    if not x_demo_session:
+        raise HTTPException(401, "Demo session required")
+    sid = demo.read_session(x_demo_session)
+    if sid is None:
+        raise HTTPException(401, "Invalid or expired session")
+
+    try:
+        demo.charge(sid)
+    except demo.DemoDenied as e:
+        raise HTTPException(e.status_code, e.detail) from e
+    return sid
+
+
 def _sse(event: str, data: dict) -> str:
     """Format one SSE frame."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -178,11 +214,11 @@ async def _run_to_payload(question: str) -> dict:
         return payload
 
 
-@app.post("/ask")
+@app.post("/ask", dependencies=[Depends(require_demo_session)])
 async def ask(req: AskRequest) -> StreamingResponse:
     return StreamingResponse(_run(req.question), media_type="text/event-stream")
 
 
-@app.post("/ask_json")
+@app.post("/ask_json", dependencies=[Depends(require_demo_session)])
 async def ask_json(req: AskRequest) -> dict:
     return await _run_to_payload(req.question)
