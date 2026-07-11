@@ -116,6 +116,19 @@ def create_demo_session(req: DemoSessionRequest) -> dict:
     }
 
 
+@app.get("/demo/session")
+def demo_session_status(x_demo_session: str | None = Header(default=None)) -> dict:
+    if not x_demo_session:
+        raise HTTPException(401, "Demo session required")
+    sid = demo.read_session(x_demo_session)
+    if sid is None:
+        raise HTTPException(401, "Invalid or expired session")
+    left = demo.remaining(sid)
+    if left is None:
+        raise HTTPException(401, "Session expired; start a new session")
+    return {"remaining": left}
+
+
 def require_demo_session(x_demo_session: str | None = Header(default=None)) -> str | None:
     if not settings.demo_require_access:
         return None

@@ -49,3 +49,12 @@ def test_session_quota_exhausts(monkeypatch):
         client.post("/ask_json", json={"question": "four five six"}, headers=headers).status_code
         == 429
     )
+
+
+def test_session_status_reports_remaining(monkeypatch):
+    monkeypatch.setattr(settings, "demo_questions_per_session", 3)
+    token = client.post("/demo/session", json={"token": "test-code"}).json()["session"]
+    headers = {"X-Demo-Session": token}
+    assert client.get("/demo/session", headers=headers).json()["remaining"] == 3
+    client.post("/ask_json", json={"question": "one two three"}, headers=headers)
+    assert client.get("/demo/session", headers=headers).json()["remaining"] == 2
