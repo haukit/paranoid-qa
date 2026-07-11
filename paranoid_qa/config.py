@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     demo_questions_per_session: int = 20
     demo_global_daily_limit: int = 100
     demo_disabled: bool = False
+    demo_secret_key: str | None = None
 
 
 @lru_cache
