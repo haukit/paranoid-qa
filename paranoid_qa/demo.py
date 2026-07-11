@@ -60,3 +60,8 @@ def charge(sid: str) -> None:
 
     _remaining[sid] = remaining - 1
     _daily[today] = _daily.get(today, 0) + 1
+
+
+def remaining(sid: str) -> int | None:
+    """Questions left for the session, or None if it has no live record."""
+    return _remaining.get(sid)
