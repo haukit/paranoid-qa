@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     demo_disabled: bool = False
     demo_secret_key: str | None = None
 
+    cors_allow_origins: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
