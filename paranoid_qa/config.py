@@ -7,6 +7,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+# USD per token (input, output). Need to update when OpenAI changes prices.
+MODEL_PRICES: dict[str, tuple[float, float]] = {
+    "gpt-4o-mini": (0.15e-6, 0.60e-6),
+    "gpt-5.4-mini": (0.75e-6, 4.50e-6),
+    "gpt-5.4-nano": (0.20e-6, 1.25e-6),
+    "text-embedding-3-small": (0.02e-6, 0.0),
+    "text-embedding-3-large": (0.13e-6, 0.0),
+}
+
+
+def token_cost(model: str, tokens_in: int, tokens_out: int) -> float:
+    """Return the USD cost of a call, pricing input and output tokens by model (prefix-matched)."""
+    prices = MODEL_PRICES.get(model)
+    if prices is None:  # match dated variants like gpt-4o-mini-2024-07-18
+        prices = next((p for k, p in MODEL_PRICES.items() if model.startswith(k)), (0.0, 0.0))
+    return tokens_in * prices[0] + tokens_out * prices[1]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

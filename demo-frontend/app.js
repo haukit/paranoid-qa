@@ -1,4 +1,4 @@
-const API = "https://paranoid-qa.onrender.com";
+const API = "http://localhost:8000" // "https://paranoid-qa.onrender.com";
 
 // grab the page elements once
 const statusEl = document.getElementById("status");
@@ -6,6 +6,7 @@ const form = document.getElementById("ask-form");
 const questionEl = document.getElementById("question");
 const askButton = document.getElementById("ask-button");
 const answerEl = document.getElementById("answer");
+const historyEl = document.getElementById("history");
 
 let sessionToken = null;
 
@@ -40,6 +41,24 @@ async function startSession() {
   }
 }
 
+//
+const history = [];
+
+function fmtTotals(t) {
+  if (!t) return "";
+  const tokens = (t.tokens_in + t.tokens_out).toLocaleString();
+  const cost = "$" + t.cost_usd.toFixed(4);
+  const secs = (t.latency_ms / 1000).toFixed(1) + "s";
+  return `${tokens} tokens · ${cost} · ${secs}`;
+}
+
+function addHistory(question, t) {
+  history.unshift({ question, t });
+  historyEl.innerHTML = history
+    .map((h) => `<li>${escapeHtml(h.question)} <small>${h.t ? "$" + h.t.cost_usd.toFixed(4) : ""}</small></li>`)
+    .join("");
+}
+
 // ask a question and render the answer
 async function ask(question) {
   askButton.disabled = true;
@@ -54,7 +73,9 @@ async function ask(question) {
     if (res.status === 401) return void (statusEl.textContent = "Session expired. Reload the demo link.");
     if (res.status === 429) return void (statusEl.textContent = "Question limit reached for this session.");
     if (!res.ok) return void (statusEl.textContent = "Something went wrong.");
-    renderAnswer(await res.json());
+    const payload = await res.json()
+    renderAnswer(payload);
+    addHistory(question, payload.telemetry);
     await refreshRemaining();
   } catch {
     statusEl.textContent = "Could not reach the demo backend.";
@@ -68,10 +89,13 @@ function renderAnswer(payload) {
   const claims = payload.claims
     .map((c) => `<li>${escapeHtml(c.text)}${c.citation ? ` <small>[${escapeHtml(c.citation)}]</small>` : ""}</li>`)
     .join("");
-  answerEl.innerHTML = `
+    answerEl.innerHTML = `
     <p>${escapeHtml(payload.answer)}</p>
     ${claims ? `<ul>${claims}</ul>` : ""}
-    <footer><small>${payload.faithful ? "✓ verified against sources" : "⚠ could not fully verify"}</small></footer>`;
+    <footer>
+      <small>${payload.faithful ? "verified against sources" : "could not fully verify"}</small><br />
+      <small>${fmtTotals(payload.telemetry)}</small>
+    </footer>`;
   answerEl.hidden = false;
 }
 
