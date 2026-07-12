@@ -1,4 +1,4 @@
-const API = "http://localhost:8000" // "https://paranoid-qa.onrender.com";
+const API = "https://paranoid-qa.onrender.com";
 
 // grab the page elements once
 const statusEl = document.getElementById("status");
