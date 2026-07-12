@@ -3,24 +3,73 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Paranoid QA: NTSB demo</title>
+  <title>Paranoid QA</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css" />
+  <style>
+    .ti { vertical-align: -2px; }
+    .layout { display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start; }
+    @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+    .ex-label { color: var(--pico-muted-color); font-size: .85rem; margin: 0 0 .5rem; display: flex; align-items: center; gap: .4rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1.5rem; }
+    .chip { cursor: pointer; font-size: .85rem; padding: .3rem .7rem; width: auto; }
+    .badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .5rem; }
+    .badge { font-size: .78rem; padding: .2rem .6rem; border-radius: .4rem; background: var(--pico-code-background-color); color: var(--pico-muted-color); }
+    .badge-ok { background: #e6f4ea; color: #1a7f37; }
+    .badge-bad { background: #fbe9e7; color: #b3261e; }
+    .badge-route { background: #e7f0fb; color: #1c4e80; }
+    .cost-note { margin: 0 0 1.25rem; }
+    .claim { border: 1px solid var(--pico-muted-border-color); border-radius: .5rem; padding: .75rem 1rem; margin-bottom: .75rem; }
+    .quote { border-left: 3px solid var(--pico-muted-border-color); padding-left: .75rem; margin: .5rem 0; font-style: italic; }
+    .cite { font-size: .85rem; margin-top: .3rem; }
+    .explain { font-size: .85rem; color: var(--pico-muted-color); }
+    .verifier { background: var(--pico-card-sectioning-background-color); border-radius: .4rem; padding: .5rem .7rem; margin-top: .6rem; }
+    .verifier-title { font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--pico-muted-color); margin-bottom: .35rem; display: flex; align-items: center; gap: .4rem; }
+    #corpus, #history { list-style: none; padding-left: 0; }
+    .hist { border: 1px solid var(--pico-muted-border-color); background: var(--pico-card-sectioning-background-color); border-radius: .5rem; padding: .55rem .7rem; margin-bottom: .5rem; font-size: .82rem; }
+    .hist-q { font-weight: 500; margin-bottom: .2rem; }
+    .hist-a { color: var(--pico-muted-color); margin-bottom: .4rem; }
+    .hist-meta { display: flex; gap: .3rem; flex-wrap: wrap; }
+    .pnode { padding: .55rem .85rem; border: 1px solid var(--pico-muted-border-color); border-radius: .5rem; margin-bottom: .5rem; font-size: .9rem; }
+    .pnode.running { color: var(--pico-muted-color); font-style: italic; }
+    .pmetrics { font-size: .75rem; color: var(--pico-muted-color); margin-top: .3rem; }
+  </style>
 </head>
 <body>
   <main class="container">
-    <h1>Paranoid QA</h1>
-    <p>Grounded, self-verifying QA over a corpus of NTSB aviation-accident reports.</p>
-
+    <hgroup>
+      <h1><i class="ti ti-shield-check"></i> Paranoid QA</h1>
+      <p>A system for grounded, self-verifying answers over any document corpus. This demo runs over a set of NTSB aviation-accident reports.</p>
+    </hgroup>
     <p id="status"></p>
-
-    <form id="ask-form">
-      <input id="question" type="text" placeholder="Ask a question about the corpus..." autocomplete="off" />
-      <button id="ask-button" type="submit">Ask</button>
-    </form>
-
-    <article id="answer" hidden></article>
+    <div class="layout">
+      <section>
+        <form id="ask-form" role="group">
+          <input id="question" type="text" placeholder="Ask a question about the reports…" autocomplete="off" />
+          <button id="ask-button" type="submit">Ask</button>
+        </form>
+        <p class="ex-label"><i class="ti ti-bulb"></i> Example questions</p>
+        <div id="suggestions" class="chips"></div>
+        <div id="pipeline"></div>
+        <article id="answer" hidden></article>
+      </section>
+      <aside>
+        <h3><i class="ti ti-books"></i> Corpus</h3>
+        <ul id="corpus"></ul>
+        <h3><i class="ti ti-history"></i> Session history</h3>
+        <ul id="history"></ul>
+      </aside>
+    </div>
+    <dialog id="doc-modal">
+      <article>
+        <header>
+          <button aria-label="Close" rel="prev" id="doc-close"></button>
+          <strong id="doc-title"></strong>
+        </header>
+        <pre id="doc-text" style="white-space: pre-wrap; max-height: 60vh; overflow: auto;"></pre>
+      </article>
+    </dialog>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>

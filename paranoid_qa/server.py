@@ -5,7 +5,7 @@ Run: uv run uvicorn paranoid_qa.server:app --reload"""
 from __future__ import annotations
 
 import json
-import os
+import time
 from collections.abc import AsyncIterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -18,12 +18,15 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from paranoid_qa import demo
+from paranoid_qa.aggregate import corpus_filenames, document_text
 from paranoid_qa.config import settings
 from paranoid_qa.graph import build_graph
+from paranoid_qa.telemetry import TokenCostProcessor
 from paranoid_qa.tracing import setup_tracing
 
-if os.getenv("PHOENIX_COLLECTOR_ENDPOINT"):
-    setup_tracing()
+tracer_provider = setup_tracing()
+_token_cost = TokenCostProcessor()
+tracer_provider.add_span_processor(_token_cost)
 
 _tracer = trace.get_tracer("paranoid-qa")
 app = FastAPI(title="paranoid-qa")
@@ -57,6 +60,17 @@ def _record_output(span, payload: dict) -> None:
     span.set_attribute(SpanAttributes.OUTPUT_VALUE, json.dumps(payload))
     span.set_attribute(SpanAttributes.OUTPUT_MIME_TYPE, "application/json")
     span.set_attribute("faithful", bool(payload.get("faithful", False)))
+
+
+def _totals(trace_id: int, latency_ms: int) -> dict:
+    """Extract the trace's token/cost totals and pair them with the request latency for the payload."""
+    usage = _token_cost.pop(trace_id)
+    return {
+        "tokens_in": usage.tokens_in,
+        "tokens_out": usage.tokens_out,
+        "cost_usd": round(usage.cost, 6),
+        "latency_ms": latency_ms,
+    }
 
 
 class AskRequest(BaseModel):
@@ -155,6 +169,27 @@ def require_demo_session(x_demo_session: str | None = Header(default=None)) -> s
     return sid
 
 
+@app.get("/corpus")
+def corpus() -> dict:
+    """List the documents backing the demo (empty if no index is present, e.g. stub mode)."""
+    try:
+        return {"documents": list(corpus_filenames())}
+    except FileNotFoundError:
+        return {"documents": []}
+
+
+@app.get("/sources/{name}")
+def source(name: str) -> dict:
+    """Return a corpus document's extracted text for the view-source panel."""
+    try:
+        text = document_text(name)
+    except FileNotFoundError:
+        text = None
+    if text is None:
+        raise HTTPException(404, "Document not found")
+    return {"document": name, "text": text}
+
+
 def _sse(event: str, data: dict) -> str:
     """Format one SSE frame."""
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
@@ -184,6 +219,9 @@ def _build_payload(state: dict) -> dict:
             "text": c.text,
             "quote": c.quote,
             "citation": str(v.source) if v.source is not None else None,
+            "document": v.source.document if v.source is not None else None,
+            "verdict": v.verdict,
+            "explanation": v.explanation,
         }
         for c, v in zip(answer.claims if answer else [], verdicts)
     ]
@@ -192,6 +230,8 @@ def _build_payload(state: dict) -> dict:
         "answer": answer.text if answer else "",
         "claims": claims,
         "faithful": state.get("faithful", False),
+        "route": state.get("route"),
+        "attempts": state.get("attempts", 0),
     }
 
 
@@ -201,6 +241,7 @@ def _stub_payload() -> dict:
         "answer": "This is a stub answer used for deployment testing.",
         "claims": [],
         "faithful": True,
+        "telemetry": {"tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "latency_ms": 0},
     }
 
 
@@ -211,14 +252,32 @@ async def _run(question: str) -> AsyncIterator[str]:
         return
 
     state = {}
+    started = time.perf_counter()
     with _ask_span(question) as span:
+        trace_id = span.get_span_context().trace_id
+        prev_usage = _token_cost.snapshot(trace_id)
+        prev_time = started
+
         async for chunk in graph.astream({"question": question}, stream_mode="updates"):
             for node, update in chunk.items():
-                yield _sse("progress", _progress(node, update))
+                current_usage = _token_cost.snapshot(trace_id)
+                now = time.perf_counter()
+                metrics = {
+                    "tokens_in": current_usage.tokens_in - prev_usage.tokens_in,
+                    "tokens_out": current_usage.tokens_out - prev_usage.tokens_out,
+                    "cost_usd": round(current_usage.cost - prev_usage.cost, 6),
+                    "ms": int((now - prev_time) * 1000),
+                    "models": current_usage.models[len(prev_usage.models) :],
+                }
+                prev_usage, prev_time = current_usage, now
+
+                yield _sse("progress", {**_progress(node, update), "metrics": metrics})
                 state.update(update)
 
         payload = _build_payload(state)
         _record_output(span, payload)
+
+        payload["telemetry"] = _totals(trace_id, int((time.perf_counter() - started) * 1000))
 
         yield _sse("answer", payload)
 
@@ -228,10 +287,16 @@ async def _run_to_payload(question: str) -> dict:
     if settings.provider == "stub":
         return _stub_payload()
 
+    started = time.perf_counter()
     with _ask_span(question) as span:
+        trace_id = span.get_span_context().trace_id
+
         state = await graph.ainvoke({"question": question})
         payload = _build_payload(state)
         _record_output(span, payload)
+
+        payload["telemetry"] = _totals(trace_id, int((time.perf_counter() - started) * 1000))
+
         return payload
 
 

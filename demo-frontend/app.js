@@ -6,6 +6,13 @@ const form = document.getElementById("ask-form");
 const questionEl = document.getElementById("question");
 const askButton = document.getElementById("ask-button");
 const answerEl = document.getElementById("answer");
+const historyEl = document.getElementById("history");
+const suggestionsEl = document.getElementById("suggestions");
+const corpusEl = document.getElementById("corpus");
+const docModal = document.getElementById("doc-modal");
+const docTitle = document.getElementById("doc-title");
+const docText = document.getElementById("doc-text");
+const pipelineEl = document.getElementById("pipeline");
 
 let sessionToken = null;
 
@@ -40,21 +47,86 @@ async function startSession() {
   }
 }
 
-// ask a question and render the answer
+// session-only log of asked questions with their cost, newest first
+const history = [];
+
+function fmtTotals(t) {
+  if (!t) return "";
+  const tokens = (t.tokens_in + t.tokens_out).toLocaleString();
+  const cost = "$" + t.cost_usd.toFixed(4);
+  const secs = (t.latency_ms / 1000).toFixed(1) + "s";
+  return `<i class="ti ti-arrows-left-right"></i> ${tokens} tokens · <i class="ti ti-coin"></i> ${cost} · <i class="ti ti-clock"></i> ${secs}`;
+}
+
+// render a history entry as a card: question, a snippet of the answer, verified badge and cost
+function addHistory(question, payload) {
+  history.unshift({ question, payload });
+  historyEl.innerHTML = history
+    .map((h) => {
+      const p = h.payload || {};
+      const cost = p.telemetry ? "$" + p.telemetry.cost_usd.toFixed(4) : "";
+      const verified = p.faithful
+        ? `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`
+        : `<span class="badge badge-bad"><i class="ti ti-shield-x"></i> unverified</span>`;
+      return `<li class="hist">
+        <div class="hist-q">${escapeHtml(h.question)}</div>
+        <div class="hist-a">${escapeHtml(truncate(p.answer || "", 140))}</div>
+        <div class="hist-meta">${verified}${cost ? ` <span class="badge"><i class="ti ti-coin"></i> ${cost}</span>` : ""}</div>
+      </li>`;
+    })
+    .join("");
+}
+
+// truncate a string to n characters with an ellipsis
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n).trimEnd() + "…" : s;
+}
+
+// one-click example questions, one for each path (specific vs aggreagte)
+const SUGGESTIONS = [
+  "What was the probable cause of the Executive Airlines Flight 5401 accident?",
+  "What factors recur across these accident reports?",
+];
+
+function renderSuggestions() {
+  suggestionsEl.innerHTML = SUGGESTIONS.map(
+    (q) => `<button type="button" class="chip secondary outline">${escapeHtml(q)}</button>`
+  ).join("");
+  suggestionsEl.querySelectorAll(".chip").forEach((el, i) => {
+    el.addEventListener("click", () => {
+      questionEl.value = SUGGESTIONS[i];
+      if (sessionToken) ask(SUGGESTIONS[i]);
+    });
+  });
+}
+
+
+// ask a question, stream the graph's progress, then render the answer
 async function ask(question) {
   askButton.disabled = true;
   statusEl.textContent = "Thinking…";
   answerEl.hidden = true;
+  pipelineEl.innerHTML = "";
+  const nodes = [];
   try {
-    const res = await fetch(`${API}/ask_json`, {
+    const res = await fetch(`${API}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Demo-Session": sessionToken },
       body: JSON.stringify({ question }),
     });
     if (res.status === 401) return void (statusEl.textContent = "Session expired. Reload the demo link.");
     if (res.status === 429) return void (statusEl.textContent = "Question limit reached for this session.");
-    if (!res.ok) return void (statusEl.textContent = "Something went wrong.");
-    renderAnswer(await res.json());
+    if (!res.ok || !res.body) return void (statusEl.textContent = "Something went wrong.");
+    await readSSE(res.body, (event, data) => {
+      if (event === "progress") {
+        nodes.push(data);
+        renderPipeline(nodes, false);
+      } else if (event === "answer") {
+        renderPipeline(nodes, true);
+        renderAnswer(data);
+        addHistory(question, data);
+      }
+    });
     await refreshRemaining();
   } catch {
     statusEl.textContent = "Could not reach the demo backend.";
@@ -63,16 +135,111 @@ async function ask(question) {
   }
 }
 
-// build the answer HTML from the JSON payload
+// read a Server-Sent Events stream, invoking cb(event, data) for each frame
+async function readSSE(stream, cb) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, i);
+      buffer = buffer.slice(i + 2);
+      let event = "message", data = "";
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (data) cb(event, JSON.parse(data));
+    }
+  }
+}
+
+// user-friendly description of what each graph node is doing
+const NODE_LABELS = {
+  route: "Deciding whether the question is specific or aggregate",
+  retrieve: "Retrieving the most relevant passages",
+  grade: "Checking whether the passages are relevant",
+  rewrite: "Rephrasing the question for better retrieval",
+  generate: "Drafting a grounded answer",
+  verify: "Verifying each claim against its source",
+  aggregate: "Searching the corpus knowledge graph",
+};
+
+// render the graph nodes as a vertical timeline; show a "running" row until done
+function renderPipeline(nodes, done) {
+  pipelineEl.innerHTML =
+    nodes.map((n) => `<div class="pnode"><strong>${escapeHtml(NODE_LABELS[n.node] || n.node)}</strong> <small>${escapeHtml(nodeSummary(n))}</small>${metricsLine(n.metrics)}</div>`).join("") +
+    (done ? "" : `<div class="pnode running">running…</div>`);
+}
+
+// per-node model / tokens / cost / time line (only the parts a node actually produced)
+function metricsLine(m) {
+  if (!m) return "";
+  const parts = [];
+  if (m.models && m.models.length) parts.push(`<i class="ti ti-cpu"></i> ${escapeHtml([...new Set(m.models.map(cleanModel))].join(", "))}`);
+  if (m.tokens_in || m.tokens_out) parts.push(`<i class="ti ti-arrows-left-right"></i> ${m.tokens_in} in · ${m.tokens_out} out`);
+  if (m.cost_usd) parts.push(`<i class="ti ti-coin"></i> $${m.cost_usd.toFixed(5)}`);
+  if (m.ms != null) parts.push(`<i class="ti ti-clock"></i> ${m.ms} ms`);
+  return parts.length ? `<div class="pmetrics">${parts.join(" · ")}</div>` : "";
+}
+
+// strip an OpenAI date suffix for display, e.g. gpt-4o-mini-2024-07-18 -> gpt-4o-mini
+function cleanModel(name) {
+  return name.replace(/-\d{4}-\d{2}-\d{2}$/, "");
+}
+
+// short human summary of a node from the fields the progress frame carries
+function nodeSummary(n) {
+  if (n.route) return `→ ${n.route}`;
+  if (n.chunks != null) return `${n.chunks} passages`;
+  if (n.verdicts) return n.verdicts.join(", ");
+  if (n.claims != null) return `${n.claims} claims`;
+  if (n.grade) return n.grade;
+  if (n.attempts != null) return `attempt ${n.attempts}`;
+  return "";
+}
+
+// compose the answer view: badges, cost disclaimer, prose answer, verified-claims panel
 function renderAnswer(payload) {
-  const claims = payload.claims
-    .map((c) => `<li>${escapeHtml(c.text)}${c.citation ? ` <small>[${escapeHtml(c.citation)}]</small>` : ""}</li>`)
-    .join("");
-  answerEl.innerHTML = `
-    <p>${escapeHtml(payload.answer)}</p>
-    ${claims ? `<ul>${claims}</ul>` : ""}
-    <footer><small>${payload.faithful ? "✓ verified against sources" : "⚠ could not fully verify"}</small></footer>`;
+  answerEl.innerHTML =
+    badgesHtml(payload) +
+    `<p class="cost-note"><small>Reported cost excludes query embedding, which is negligible.</small></p>` +
+    `<p>${escapeHtml(payload.answer)}</p>` +
+    claimsHtml(payload.claims);
   answerEl.hidden = false;
+}
+
+// route, verified/unverified, revised count, and the cost/token totals
+function badgesHtml(p) {
+  const badges = [];
+  if (p.route) badges.push(`<span class="badge badge-route"><i class="ti ti-route"></i> ${escapeHtml(p.route)} path</span>`);
+  badges.push(p.faithful
+    ? `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`
+    : `<span class="badge badge-bad"><i class="ti ti-shield-x"></i> unverified</span>`);
+  if (p.attempts > 1) badges.push(`<span class="badge"><i class="ti ti-refresh"></i> revised ${p.attempts - 1}×</span>`);
+  if (p.telemetry) badges.push(`<span class="badge">${fmtTotals(p.telemetry)}</span>`);
+  return `<div class="badges">${badges.join("")}</div>`;
+}
+
+// one card per claim: text, quote, citation, and a nested verifier card (verdict + explanation)
+function claimsHtml(claims) {
+  if (!claims || !claims.length) return "";
+  const items = claims.map((c) => {
+    const ok = c.verdict === "supported";
+    const quote = c.quote ? `<blockquote class="quote">${escapeHtml(c.quote)}</blockquote>` : "";
+    const cite = c.citation ? `<div class="cite"><i class="ti ti-file-text"></i> <a href="#"${c.document ? ` data-doc="${escapeHtml(c.document)}"` : ""}>${escapeHtml(c.citation)}</a></div>` : "";
+    const badge = `<span class="badge ${ok ? "badge-ok" : "badge-bad"}"><i class="ti ti-${ok ? "check" : "x"}"></i> ${escapeHtml(c.verdict)}</span>`;
+    const verifier = `<div class="verifier">
+        <div class="verifier-title"><i class="ti ti-gavel"></i> Verifier ${badge}</div>
+        ${c.explanation ? `<div class="explain">${escapeHtml(c.explanation)}</div>` : ""}
+      </div>`;
+    return `<div class="claim"><div>${escapeHtml(c.text)}</div>${quote}${cite}${verifier}</div>`;
+  }).join("");
+  return `<h4>Verified claims</h4>${items}`;
 }
 
 // refresh the remaining-questions count (read-only, no charge)
@@ -96,4 +263,41 @@ form.addEventListener("submit", (e) => {
   if (q && sessionToken) ask(q);
 });
 
+// fetch the corpus document list into the sidebar (public, no session needed)
+async function loadCorpus() {
+  try {
+    const res = await fetch(`${API}/corpus`);
+    if (!res.ok) return;
+    const docs = (await res.json()).documents || [];
+    corpusEl.innerHTML = docs
+      .map((d) => `<li><a href="#" data-doc="${escapeHtml(d)}">${escapeHtml(d)}</a></li>`)
+      .join("");
+  } catch {}
+}
+
+// fetch a document's extracted text and show it in the modal
+async function viewSource(name) {
+  docTitle.textContent = name;
+  docText.textContent = "Loading…";
+  docModal.showModal();
+  try {
+    const res = await fetch(`${API}/sources/${encodeURIComponent(name)}`);
+    docText.textContent = res.ok ? (await res.json()).text : "Could not load this document.";
+  } catch {
+    docText.textContent = "Could not load this document.";
+  }
+}
+
+// any element with data-doc (a corpus item or a claim citation) opens its source
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-doc]");
+  if (el) {
+    e.preventDefault();
+    viewSource(el.getAttribute("data-doc"));
+  }
+});
+document.getElementById("doc-close").addEventListener("click", () => docModal.close());
+
 startSession();
+renderSuggestions();
+loadCorpus();
