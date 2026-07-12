@@ -20,6 +20,8 @@
     .cite { font-size: .85rem; }
     .explain { font-size: .85rem; color: var(--pico-muted-color); margin-top: .4rem; }
     #history li { cursor: pointer; }
+    .pnode { padding: .35rem .75rem; border-left: 2px solid var(--pico-muted-border-color); margin-bottom: .3rem; font-size: .9rem; }
+    .pnode.running { color: var(--pico-muted-color); font-style: italic; }
   </style>
 </head>
 <body>
@@ -36,6 +38,7 @@
           <button id="ask-button" type="submit">Ask</button>
         </form>
         <div id="suggestions" class="chips"></div>
+        <div id="pipeline"></div>
         <article id="answer" hidden></article>
       </section>
       <aside>

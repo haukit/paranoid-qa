@@ -12,6 +12,7 @@ const corpusEl = document.getElementById("corpus");
 const docModal = document.getElementById("doc-modal");
 const docTitle = document.getElementById("doc-title");
 const docText = document.getElementById("doc-text");
+const pipelineEl = document.getElementById("pipeline");
 
 let sessionToken = null;
 
@@ -83,29 +84,90 @@ function renderSuggestions() {
 }
 
 
-// ask a question and render the answer
+// ask a question, stream the graph's progress, then render the answer
 async function ask(question) {
   askButton.disabled = true;
   statusEl.textContent = "Thinking…";
   answerEl.hidden = true;
+  pipelineEl.innerHTML = "";
+  const nodes = [];
   try {
-    const res = await fetch(`${API}/ask_json`, {
+    const res = await fetch(`${API}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Demo-Session": sessionToken },
       body: JSON.stringify({ question }),
     });
     if (res.status === 401) return void (statusEl.textContent = "Session expired. Reload the demo link.");
     if (res.status === 429) return void (statusEl.textContent = "Question limit reached for this session.");
-    if (!res.ok) return void (statusEl.textContent = "Something went wrong.");
-    const payload = await res.json()
-    renderAnswer(payload);
-    addHistory(question, payload.telemetry);
+    if (!res.ok || !res.body) return void (statusEl.textContent = "Something went wrong.");
+    await readSSE(res.body, (event, data) => {
+      if (event === "progress") {
+        nodes.push(data);
+        renderPipeline(nodes, false);
+      } else if (event === "answer") {
+        renderPipeline(nodes, true);
+        renderAnswer(data);
+        addHistory(question, data.telemetry);
+      }
+    });
     await refreshRemaining();
   } catch {
     statusEl.textContent = "Could not reach the demo backend.";
   } finally {
     askButton.disabled = false;
   }
+}
+
+// read a Server-Sent Events stream, invoking cb(event, data) for each frame
+async function readSSE(stream, cb) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, i);
+      buffer = buffer.slice(i + 2);
+      let event = "message", data = "";
+      for (const line of frame.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (data) cb(event, JSON.parse(data));
+    }
+  }
+}
+
+// user-friendly description of what each graph node is doing
+const NODE_LABELS = {
+  route: "Deciding whether the question is specific or aggregate",
+  retrieve: "Retrieving the most relevant passages",
+  grade: "Checking whether the passages are relevant",
+  rewrite: "Rephrasing the question for better retrieval",
+  generate: "Drafting a grounded answer",
+  verify: "Verifying each claim against its source",
+  aggregate: "Searching the corpus knowledge graph",
+};
+
+// render the graph nodes as a vertical timeline; show a "running" row until done
+function renderPipeline(nodes, done) {
+  pipelineEl.innerHTML =
+    nodes.map((n) => `<div class="pnode"><strong>${escapeHtml(NODE_LABELS[n.node] || n.node)}</strong> <small>${escapeHtml(nodeSummary(n))}</small></div>`).join("") +
+    (done ? "" : `<div class="pnode running">running…</div>`);
+}
+
+// short human summary of a node from the fields the progress frame carries
+function nodeSummary(n) {
+  if (n.route) return `→ ${n.route}`;
+  if (n.chunks != null) return `${n.chunks} passages`;
+  if (n.verdicts) return n.verdicts.join(", ");
+  if (n.claims != null) return `${n.claims} claims`;
+  if (n.grade) return n.grade;
+  if (n.attempts != null) return `attempt ${n.attempts}`;
+  return "";
 }
 
 // compose the answer view
