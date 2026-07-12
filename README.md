@@ -4,6 +4,8 @@ A grounded, self-verifying question-answering service over a document corpus.
 
 Every answer is decomposed into atomic claims, each backed by a verbatim quote from the sources. A separate critic (a different model), excluded from the generator's reasoning,  independently verifies that each quote (a) actually exists in the retrieved documents and (b) genuinely supports its claim, attaching the source citation (document + page). Unsupported or fabricated claims are regenerated with the critic's feedback. All correction loops are bounded by a retry budget.
 
+A live demo runs at [haukit.github.io/paranoid-qa](https://haukit.github.io/paranoid-qa/), over a corpus of real NTSB accident reports and gated behind an invite code (see [Deployment](#deployment)).
+
 Stack: LangGraph (orchestration), LlamaIndex (hybrid retrieval + reranking), LightRAG (graph-based corpus-level retrieval), Pydantic (typed structured outputs), OpenAI (also supports local models via Ollama)
 
 ## Quickstart
@@ -145,6 +147,14 @@ One possible improvement is to cache the retriever, since it is rebuilt on every
 
 Token usage and cost: Each query averages 13300 prompt and 270 completion tokens, ~$0.0016 at gpt-4o-mini rates (about $1.60 per 1,000 queries). Cost is dominated by input tokens (48:1 prompt-to-completion ratio). This can be attributed to the RAG system that re-sends retrieved context as input on every call, while emitting short structured outputs.
 
+## Deployment
+
+I containerized the service and run it as a live, access-gated demo: a FastAPI backend on Render (Docker) and a static frontend on GitHub Pages. Both auto-deploy on merge.
+
+- Image: a multi-stage Dockerfile installs dependencies with `uv` and bakes in the prebuilt `.storage` / `.lightrag` index, downloaded from a GitHub Release at build time rather than rebuilt on deploy (so no embedding or graph-extraction cost per deploy).
+- Access control: the public endpoint is gated. A stable invite code is exchanged at `/demo/session` for a signed, expiring session token; each `/ask` then decrements a per-session quota, bounded by a global daily limit and a kill switch, with an OpenAI dashboard spend cap as the hard ceiling. Quotas are currently in-memory records.
+- Frontend: a static page that streams the graph's progress live over SSE and renders the verified-claims panel, per-node model / tokens / cost / latency, a corpus browser with view-source, and session history.
+
 ## TODO
 
 - Router: add few-shot examples to reduce phrasing-sensitive misroutes (e.g. "which report involves X" vs "how many reports involve X").
@@ -153,4 +163,4 @@ Token usage and cost: Each query averages 13300 prompt and 270 completion tokens
 - Aggregate eval: rephrase questions to be more unambiguous and grade on the cited references rather than prose substrings.
 - `verify_aggregate`: add an LLM entailment pass (does the answer follow from the cited documents?) on top of reference existence.
 - Evaluation: generation faithfulness / answer relevance (LLM-judge), multi-hop retrieval with NDCG, the candidate-ceiling Recall@10, and harder critic negatives (more "unless"-style inversions).
-- Serving: Dockerfile and container deployment.
+- Deployment: durable Postgres-backed sessions and quotas (currently in-memory, reset on restart).
