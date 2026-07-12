@@ -3,31 +3,48 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Paranoid QA: NTSB demo</title>
+  <title>Paranoid QA</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <style>
+    .layout { display: grid; grid-template-columns: 1fr 300px; gap: 2rem; align-items: start; }
+    @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+    .chips { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0 1.5rem; }
+    .chip { cursor: pointer; font-size: .85rem; padding: .3rem .7rem; width: auto; }
+    .badges { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+    .badge { font-size: .78rem; padding: .2rem .6rem; border-radius: .4rem; background: var(--pico-code-background-color); color: var(--pico-muted-color); }
+    .badge-ok { background: #e6f4ea; color: #1a7f37; }
+    .badge-bad { background: #fbe9e7; color: #b3261e; }
+    .claim { border: 1px solid var(--pico-muted-border-color); border-radius: .5rem; padding: .75rem 1rem; margin-bottom: .75rem; }
+    .claim-head { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
+    .quote { border-left: 3px solid var(--pico-muted-border-color); padding-left: .75rem; margin: .5rem 0; font-style: italic; }
+    .cite { font-size: .85rem; }
+    .explain { font-size: .85rem; color: var(--pico-muted-color); margin-top: .4rem; }
+    #history li { cursor: pointer; }
+  </style>
 </head>
 <body>
   <main class="container">
-    <h1>Paranoid QA</h1>
-    <p>Grounded, self-verifying QA over a corpus of NTSB aviation-accident reports.</p>
-
+    <hgroup>
+      <h1>Paranoid QA</h1>
+      <p>Grounded, self-verifying answers over a corpus of NTSB aviation-accident reports.</p>
+    </hgroup>
     <p id="status"></p>
-
-    <form id="ask-form">
-      <input id="question" type="text" placeholder="Ask a question about the corpus..." autocomplete="off" />
-      <button id="ask-button" type="submit">Ask</button>
-    </form>
-
-    <article id="answer" hidden></article>
-
-    <p><small>Reported cost excludes query embedding, which is negligible.</small></p>
-
-    <section>
-      <h3>This session</h3>
-      <ul id="history"></ul>
-    </section>
+    <div class="layout">
+      <section>
+        <form id="ask-form" role="group">
+          <input id="question" type="text" placeholder="Ask a question about the reports…" autocomplete="off" />
+          <button id="ask-button" type="submit">Ask</button>
+        </form>
+        <div id="suggestions" class="chips"></div>
+        <article id="answer" hidden></article>
+      </section>
+      <aside>
+        <h3>This session</h3>
+        <ul id="history"></ul>
+        <small>Reported cost excludes query embedding, which is negligible.</small>
+      </aside>
+    </div>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>

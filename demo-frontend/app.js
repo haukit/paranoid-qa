@@ -7,6 +7,7 @@ const questionEl = document.getElementById("question");
 const askButton = document.getElementById("ask-button");
 const answerEl = document.getElementById("answer");
 const historyEl = document.getElementById("history");
+const suggestionsEl = document.getElementById("suggestions");
 
 let sessionToken = null;
 
@@ -41,7 +42,7 @@ async function startSession() {
   }
 }
 
-//
+// session-only log of asked questions with their cost, newest first
 const history = [];
 
 function fmtTotals(t) {
@@ -58,6 +59,25 @@ function addHistory(question, t) {
     .map((h) => `<li>${escapeHtml(h.question)} <small>${h.t ? "$" + h.t.cost_usd.toFixed(4) : ""}</small></li>`)
     .join("");
 }
+
+// one-click example questions, one for each path (specific vs aggreagte)
+const SUGGESTIONS = [
+  "What was the probable cause of the Executive Airlines Flight 5401 accident?",
+  "What factors recur across these accident reports?",
+];
+
+function renderSuggestions() {
+  suggestionsEl.innerHTML = SUGGESTIONS.map(
+    (q) => `<button type="button" class="chip secondary outline">${escapeHtml(q)}</button>`
+  ).join("");
+  suggestionsEl.querySelectorAll(".chip").forEach((el, i) => {
+    el.addEventListener("click", () => {
+      questionEl.value = SUGGESTIONS[i];
+      if (sessionToken) ask(SUGGESTIONS[i]);
+    });
+  });
+}
+
 
 // ask a question and render the answer
 async function ask(question) {
@@ -84,19 +104,32 @@ async function ask(question) {
   }
 }
 
-// build the answer HTML from the JSON payload
+// compose the answer view
 function renderAnswer(payload) {
-  const claims = payload.claims
-    .map((c) => `<li>${escapeHtml(c.text)}${c.citation ? ` <small>[${escapeHtml(c.citation)}]</small>` : ""}</li>`)
-    .join("");
-    answerEl.innerHTML = `
-    <p>${escapeHtml(payload.answer)}</p>
-    ${claims ? `<ul>${claims}</ul>` : ""}
-    <footer>
-      <small>${payload.faithful ? "verified against sources" : "could not fully verify"}</small><br />
-      <small>${fmtTotals(payload.telemetry)}</small>
-    </footer>`;
+  answerEl.innerHTML = badgesHtml(payload) + `<p>${escapeHtml(payload.answer)}</p>` + claimsHtml(payload.claims);
   answerEl.hidden = false;
+}
+
+function badgesHtml(p) {
+  const badges = [];
+  if (p.route) badges.push(`<span class="badge">${escapeHtml(p.route)} path</span>`);
+  badges.push(p.faithful ? `<span class="badge badge-ok">verified</span>` : `<span class="badge badge-bad">unverified</span>`);
+  if (p.attempts > 1) badges.push(`<span class="badge">revised ${p.attempts - 1}×</span>`);
+  if (p.telemetry) badges.push(`<span class="badge">${fmtTotals(p.telemetry)}</span>`);
+  return `<div class="badges">${badges.join("")}</div>`;
+}
+
+function claimsHtml(claims) {
+  if (!claims || !claims.length) return "";
+  const items = claims.map((c) => {
+    const ok = c.verdict === "supported";
+    const badge = `<span class="badge ${ok ? "badge-ok" : "badge-bad"}">${escapeHtml(c.verdict)}</span>`;
+    const quote = c.quote ? `<blockquote class="quote">${escapeHtml(c.quote)}</blockquote>` : "";
+    const cite = c.citation ? `<div class="cite">${escapeHtml(c.citation)}</div>` : "";
+    const explain = c.explanation ? `<div class="explain">${escapeHtml(c.explanation)}</div>` : "";
+    return `<div class="claim"><div class="claim-head"><span>${escapeHtml(c.text)}</span>${badge}</div>${quote}${cite}${explain}</div>`;
+  }).join("");
+  return `<h4>Verified claims</h4>${items}`;
 }
 
 // refresh the remaining-questions count (read-only, no charge)
@@ -121,3 +154,4 @@ form.addEventListener("submit", (e) => {
 });
 
 startSession();
+renderSuggestions();
