@@ -197,6 +197,8 @@ def _build_payload(state: dict) -> dict:
             "text": c.text,
             "quote": c.quote,
             "citation": str(v.source) if v.source is not None else None,
+            "verdict": v.verdict,
+            "explanation": v.explanation,
         }
         for c, v in zip(answer.claims if answer else [], verdicts)
     ]
@@ -205,6 +207,8 @@ def _build_payload(state: dict) -> dict:
         "answer": answer.text if answer else "",
         "claims": claims,
         "faithful": state.get("faithful", False),
+        "route": state.get("route"),
+        "attempts": state.get("attempts", 0),
     }
 
 
