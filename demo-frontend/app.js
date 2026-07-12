@@ -55,14 +55,31 @@ function fmtTotals(t) {
   const tokens = (t.tokens_in + t.tokens_out).toLocaleString();
   const cost = "$" + t.cost_usd.toFixed(4);
   const secs = (t.latency_ms / 1000).toFixed(1) + "s";
-  return `${tokens} tokens · ${cost} · ${secs}`;
+  return `<i class="ti ti-arrows-left-right"></i> ${tokens} tokens · <i class="ti ti-coin"></i> ${cost} · <i class="ti ti-clock"></i> ${secs}`;
 }
 
-function addHistory(question, t) {
-  history.unshift({ question, t });
+// render a history entry as a card: question, a snippet of the answer, verified badge and cost
+function addHistory(question, payload) {
+  history.unshift({ question, payload });
   historyEl.innerHTML = history
-    .map((h) => `<li>${escapeHtml(h.question)} <small>${h.t ? "$" + h.t.cost_usd.toFixed(4) : ""}</small></li>`)
+    .map((h) => {
+      const p = h.payload || {};
+      const cost = p.telemetry ? "$" + p.telemetry.cost_usd.toFixed(4) : "";
+      const verified = p.faithful
+        ? `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`
+        : `<span class="badge badge-bad"><i class="ti ti-shield-x"></i> unverified</span>`;
+      return `<li class="hist">
+        <div class="hist-q">${escapeHtml(h.question)}</div>
+        <div class="hist-a">${escapeHtml(truncate(p.answer || "", 140))}</div>
+        <div class="hist-meta">${verified}${cost ? ` <span class="badge"><i class="ti ti-coin"></i> ${cost}</span>` : ""}</div>
+      </li>`;
+    })
     .join("");
+}
+
+// truncate a string to n characters with an ellipsis
+function truncate(s, n) {
+  return s.length > n ? s.slice(0, n).trimEnd() + "…" : s;
 }
 
 // one-click example questions, one for each path (specific vs aggreagte)
@@ -107,7 +124,7 @@ async function ask(question) {
       } else if (event === "answer") {
         renderPipeline(nodes, true);
         renderAnswer(data);
-        addHistory(question, data.telemetry);
+        addHistory(question, data);
       }
     });
     await refreshRemaining();
@@ -163,10 +180,10 @@ function renderPipeline(nodes, done) {
 function metricsLine(m) {
   if (!m) return "";
   const parts = [];
-  if (m.models && m.models.length) parts.push(escapeHtml([...new Set(m.models.map(cleanModel))].join(", ")));
-  if (m.tokens_in || m.tokens_out) parts.push(`${m.tokens_in} in · ${m.tokens_out} out`);
-  if (m.cost_usd) parts.push("$" + m.cost_usd.toFixed(5));
-  if (m.ms != null) parts.push(m.ms + " ms");
+  if (m.models && m.models.length) parts.push(`<i class="ti ti-cpu"></i> ${escapeHtml([...new Set(m.models.map(cleanModel))].join(", "))}`);
+  if (m.tokens_in || m.tokens_out) parts.push(`<i class="ti ti-arrows-left-right"></i> ${m.tokens_in} in · ${m.tokens_out} out`);
+  if (m.cost_usd) parts.push(`<i class="ti ti-coin"></i> $${m.cost_usd.toFixed(5)}`);
+  if (m.ms != null) parts.push(`<i class="ti ti-clock"></i> ${m.ms} ms`);
   return parts.length ? `<div class="pmetrics">${parts.join(" · ")}</div>` : "";
 }
 
@@ -186,30 +203,41 @@ function nodeSummary(n) {
   return "";
 }
 
-// compose the answer view
+// compose the answer view: badges, cost disclaimer, prose answer, verified-claims panel
 function renderAnswer(payload) {
-  answerEl.innerHTML = badgesHtml(payload) + `<p>${escapeHtml(payload.answer)}</p>` + claimsHtml(payload.claims);
+  answerEl.innerHTML =
+    badgesHtml(payload) +
+    `<p class="cost-note"><small>Reported cost excludes query embedding, which is negligible.</small></p>` +
+    `<p>${escapeHtml(payload.answer)}</p>` +
+    claimsHtml(payload.claims);
   answerEl.hidden = false;
 }
 
+// route, verified/unverified, revised count, and the cost/token totals
 function badgesHtml(p) {
   const badges = [];
-  if (p.route) badges.push(`<span class="badge">${escapeHtml(p.route)} path</span>`);
-  badges.push(p.faithful ? `<span class="badge badge-ok">verified</span>` : `<span class="badge badge-bad">unverified</span>`);
-  if (p.attempts > 1) badges.push(`<span class="badge">revised ${p.attempts - 1}×</span>`);
+  if (p.route) badges.push(`<span class="badge badge-route"><i class="ti ti-route"></i> ${escapeHtml(p.route)} path</span>`);
+  badges.push(p.faithful
+    ? `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`
+    : `<span class="badge badge-bad"><i class="ti ti-shield-x"></i> unverified</span>`);
+  if (p.attempts > 1) badges.push(`<span class="badge"><i class="ti ti-refresh"></i> revised ${p.attempts - 1}×</span>`);
   if (p.telemetry) badges.push(`<span class="badge">${fmtTotals(p.telemetry)}</span>`);
   return `<div class="badges">${badges.join("")}</div>`;
 }
 
+// one card per claim: text, quote, citation, and a nested verifier card (verdict + explanation)
 function claimsHtml(claims) {
   if (!claims || !claims.length) return "";
   const items = claims.map((c) => {
     const ok = c.verdict === "supported";
-    const badge = `<span class="badge ${ok ? "badge-ok" : "badge-bad"}">${escapeHtml(c.verdict)}</span>`;
     const quote = c.quote ? `<blockquote class="quote">${escapeHtml(c.quote)}</blockquote>` : "";
-    const cite = c.citation ? `<div class="cite"><a href="#"${c.document ? ` data-doc="${escapeHtml(c.document)}"` : ""}>${escapeHtml(c.citation)}</a></div>` : "";
-    const explain = c.explanation ? `<div class="explain">${escapeHtml(c.explanation)}</div>` : "";
-    return `<div class="claim"><div class="claim-head"><span>${escapeHtml(c.text)}</span>${badge}</div>${quote}${cite}${explain}</div>`;
+    const cite = c.citation ? `<div class="cite"><i class="ti ti-file-text"></i> <a href="#"${c.document ? ` data-doc="${escapeHtml(c.document)}"` : ""}>${escapeHtml(c.citation)}</a></div>` : "";
+    const badge = `<span class="badge ${ok ? "badge-ok" : "badge-bad"}"><i class="ti ti-${ok ? "check" : "x"}"></i> ${escapeHtml(c.verdict)}</span>`;
+    const verifier = `<div class="verifier">
+        <div class="verifier-title"><i class="ti ti-gavel"></i> Verifier ${badge}</div>
+        ${c.explanation ? `<div class="explain">${escapeHtml(c.explanation)}</div>` : ""}
+      </div>`;
+    return `<div class="claim"><div>${escapeHtml(c.text)}</div>${quote}${cite}${verifier}</div>`;
   }).join("");
   return `<h4>Verified claims</h4>${items}`;
 }
