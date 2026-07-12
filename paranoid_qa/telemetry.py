@@ -16,12 +16,13 @@ class Usage:
 
     # Fixed record created once per in-flight trace; __slots__ drops the
     # per-instance __dict__ to keep it lean.
-    __slots__ = ("tokens_in", "tokens_out", "cost")
+    __slots__ = ("tokens_in", "tokens_out", "cost", "models")
 
     def __init__(self) -> None:
         self.tokens_in = 0
         self.tokens_out = 0
         self.cost = 0.0
+        self.models: list[str] = []
 
 
 class TokenCostProcessor(SpanProcessor):
@@ -59,8 +60,21 @@ class TokenCostProcessor(SpanProcessor):
             usage.tokens_in += tin
             usage.tokens_out += tout
             usage.cost += token_cost(model, tin, tout)
+            usage.models.append(model)
 
     def pop(self, trace_id: int) -> Usage:
         """Remove and return the accumulated usage for a finished trace (empty if unseen)."""
         with self._lock:
             return self._usage_by_trace.pop(trace_id, Usage())
+
+    def snapshot(self, trace_id: int) -> Usage:
+        """Return a copy of a trace's usage so far, without removing it."""
+        with self._lock:
+            usage = self._usage_by_trace.get(trace_id)
+            snapshot = Usage()
+            if usage is not None:
+                snapshot.tokens_in = usage.tokens_in
+                snapshot.tokens_out = usage.tokens_out
+                snapshot.cost = usage.cost
+                snapshot.models = list(usage.models)
+            return snapshot

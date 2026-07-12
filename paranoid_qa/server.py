@@ -255,10 +255,23 @@ async def _run(question: str) -> AsyncIterator[str]:
     started = time.perf_counter()
     with _ask_span(question) as span:
         trace_id = span.get_span_context().trace_id
+        prev_usage = _token_cost.snapshot(trace_id)
+        prev_time = started
 
         async for chunk in graph.astream({"question": question}, stream_mode="updates"):
             for node, update in chunk.items():
-                yield _sse("progress", _progress(node, update))
+                current_usage = _token_cost.snapshot(trace_id)
+                now = time.perf_counter()
+                metrics = {
+                    "tokens_in": current_usage.tokens_in - prev_usage.tokens_in,
+                    "tokens_out": current_usage.tokens_out - prev_usage.tokens_out,
+                    "cost_usd": round(current_usage.cost - prev_usage.cost, 6),
+                    "ms": int((now - prev_time) * 1000),
+                    "models": current_usage.models[len(prev_usage.models) :],
+                }
+                prev_usage, prev_time = current_usage, now
+
+                yield _sse("progress", {**_progress(node, update), "metrics": metrics})
                 state.update(update)
 
         payload = _build_payload(state)
