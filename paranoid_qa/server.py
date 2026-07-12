@@ -219,6 +219,7 @@ def _build_payload(state: dict) -> dict:
             "text": c.text,
             "quote": c.quote,
             "citation": str(v.source) if v.source is not None else None,
+            "document": v.source.document if v.source is not None else None,
             "verdict": v.verdict,
             "explanation": v.explanation,
         }

@@ -39,11 +39,22 @@
         <article id="answer" hidden></article>
       </section>
       <aside>
+        <h3>Corpus</h3>
+        <ul id="corpus"></ul>
         <h3>This session</h3>
         <ul id="history"></ul>
         <small>Reported cost excludes query embedding, which is negligible.</small>
       </aside>
     </div>
+    <dialog id="doc-modal">
+      <article>
+        <header>
+          <button aria-label="Close" rel="prev" id="doc-close"></button>
+          <strong id="doc-title"></strong>
+        </header>
+        <pre id="doc-text" style="white-space: pre-wrap; max-height: 60vh; overflow: auto;"></pre>
+      </article>
+    </dialog>
   </main>
   <script src="app.js"></script>
 </body>

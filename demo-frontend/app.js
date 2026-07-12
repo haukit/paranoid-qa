@@ -8,6 +8,10 @@ const askButton = document.getElementById("ask-button");
 const answerEl = document.getElementById("answer");
 const historyEl = document.getElementById("history");
 const suggestionsEl = document.getElementById("suggestions");
+const corpusEl = document.getElementById("corpus");
+const docModal = document.getElementById("doc-modal");
+const docTitle = document.getElementById("doc-title");
+const docText = document.getElementById("doc-text");
 
 let sessionToken = null;
 
@@ -125,7 +129,7 @@ function claimsHtml(claims) {
     const ok = c.verdict === "supported";
     const badge = `<span class="badge ${ok ? "badge-ok" : "badge-bad"}">${escapeHtml(c.verdict)}</span>`;
     const quote = c.quote ? `<blockquote class="quote">${escapeHtml(c.quote)}</blockquote>` : "";
-    const cite = c.citation ? `<div class="cite">${escapeHtml(c.citation)}</div>` : "";
+    const cite = c.citation ? `<div class="cite"><a href="#"${c.document ? ` data-doc="${escapeHtml(c.document)}"` : ""}>${escapeHtml(c.citation)}</a></div>` : "";
     const explain = c.explanation ? `<div class="explain">${escapeHtml(c.explanation)}</div>` : "";
     return `<div class="claim"><div class="claim-head"><span>${escapeHtml(c.text)}</span>${badge}</div>${quote}${cite}${explain}</div>`;
   }).join("");
@@ -153,5 +157,41 @@ form.addEventListener("submit", (e) => {
   if (q && sessionToken) ask(q);
 });
 
+// fetch the corpus document list into the sidebar (public, no session needed)
+async function loadCorpus() {
+  try {
+    const res = await fetch(`${API}/corpus`);
+    if (!res.ok) return;
+    const docs = (await res.json()).documents || [];
+    corpusEl.innerHTML = docs
+      .map((d) => `<li><a href="#" data-doc="${escapeHtml(d)}">${escapeHtml(d)}</a></li>`)
+      .join("");
+  } catch {}
+}
+
+// fetch a document's extracted text and show it in the modal
+async function viewSource(name) {
+  docTitle.textContent = name;
+  docText.textContent = "Loading…";
+  docModal.showModal();
+  try {
+    const res = await fetch(`${API}/sources/${encodeURIComponent(name)}`);
+    docText.textContent = res.ok ? (await res.json()).text : "Could not load this document.";
+  } catch {
+    docText.textContent = "Could not load this document.";
+  }
+}
+
+// any element with data-doc (a corpus item or a claim citation) opens its source
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-doc]");
+  if (el) {
+    e.preventDefault();
+    viewSource(el.getAttribute("data-doc"));
+  }
+});
+document.getElementById("doc-close").addEventListener("click", () => docModal.close());
+
 startSession();
 renderSuggestions();
+loadCorpus();
