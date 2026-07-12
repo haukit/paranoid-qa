@@ -80,14 +80,30 @@ def build_lightrag() -> None:
 
 
 @lru_cache(maxsize=1)
-def _corpus_filenames() -> tuple[str, ...]:
+def corpus_filenames() -> tuple[str, ...]:
     """Filenames the LightRAG graph was built from."""
     status = json.loads((LIGHTRAG_DIR / "kv_store_doc_status.json").read_text())
     return tuple(sorted({v["file_path"] for v in status.values() if v.get("file_path")}))
 
 
+@lru_cache(maxsize=1)
+def _docs_by_filename() -> dict[str, str]:
+    """Map each corpus filename to its extracted text."""
+    docs = json.loads((LIGHTRAG_DIR / "kv_store_full_docs.json").read_text())
+    return {
+        v["file_path"]: v["content"]
+        for v in docs.values()
+        if isinstance(v, dict) and "file_path" in v and "content" in v
+    }
+
+
+def document_text(name: str) -> str | None:
+    """Return a corpus document's extracted text by filename, or None if unknown."""
+    return _docs_by_filename().get(name)
+
+
 def _references_from_context(context: str) -> list[Source]:
-    return [Source(document=name) for name in _corpus_filenames() if name in context]
+    return [Source(document=name) for name in corpus_filenames() if name in context]
 
 
 DECOMPOSE_SYSTEM = """You are given an ANSWER to a corpus-level question. Break it into atomic

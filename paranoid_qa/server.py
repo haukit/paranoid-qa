@@ -18,6 +18,7 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from paranoid_qa import demo
+from paranoid_qa.aggregate import corpus_filenames, document_text
 from paranoid_qa.config import settings
 from paranoid_qa.graph import build_graph
 from paranoid_qa.telemetry import TokenCostProcessor
@@ -166,6 +167,27 @@ def require_demo_session(x_demo_session: str | None = Header(default=None)) -> s
     except demo.DemoDenied as e:
         raise HTTPException(e.status_code, e.detail) from e
     return sid
+
+
+@app.get("/corpus")
+def corpus() -> dict:
+    """List the documents backing the demo (empty if no index is present, e.g. stub mode)."""
+    try:
+        return {"documents": list(corpus_filenames())}
+    except FileNotFoundError:
+        return {"documents": []}
+
+
+@app.get("/sources/{name}")
+def source(name: str) -> dict:
+    """Return a corpus document's extracted text for the view-source panel."""
+    try:
+        text = document_text(name)
+    except FileNotFoundError:
+        text = None
+    if text is None:
+        raise HTTPException(404, "Document not found")
+    return {"document": name, "text": text}
 
 
 def _sse(event: str, data: dict) -> str:
