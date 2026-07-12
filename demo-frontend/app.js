@@ -155,8 +155,24 @@ const NODE_LABELS = {
 // render the graph nodes as a vertical timeline; show a "running" row until done
 function renderPipeline(nodes, done) {
   pipelineEl.innerHTML =
-    nodes.map((n) => `<div class="pnode"><strong>${escapeHtml(NODE_LABELS[n.node] || n.node)}</strong> <small>${escapeHtml(nodeSummary(n))}</small></div>`).join("") +
+    nodes.map((n) => `<div class="pnode"><strong>${escapeHtml(NODE_LABELS[n.node] || n.node)}</strong> <small>${escapeHtml(nodeSummary(n))}</small>${metricsLine(n.metrics)}</div>`).join("") +
     (done ? "" : `<div class="pnode running">running…</div>`);
+}
+
+// per-node model / tokens / cost / time line (only the parts a node actually produced)
+function metricsLine(m) {
+  if (!m) return "";
+  const parts = [];
+  if (m.models && m.models.length) parts.push(escapeHtml([...new Set(m.models.map(cleanModel))].join(", ")));
+  if (m.tokens_in || m.tokens_out) parts.push(`${m.tokens_in} in · ${m.tokens_out} out`);
+  if (m.cost_usd) parts.push("$" + m.cost_usd.toFixed(5));
+  if (m.ms != null) parts.push(m.ms + " ms");
+  return parts.length ? `<div class="pmetrics">${parts.join(" · ")}</div>` : "";
+}
+
+// strip an OpenAI date suffix for display, e.g. gpt-4o-mini-2024-07-18 -> gpt-4o-mini
+function cleanModel(name) {
+  return name.replace(/-\d{4}-\d{2}-\d{2}$/, "");
 }
 
 // short human summary of a node from the fields the progress frame carries
