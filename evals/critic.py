@@ -43,25 +43,35 @@ import asyncio
 import json
 from pathlib import Path
 
-from paranoid_qa.schemas import Claim, RetrievedChunk, Source
-from paranoid_qa.verify import verify_claim
+from paranoid_qa.aggregate.verification import verify_aggregate_claim
+from paranoid_qa.contracts.aggregate import AggregateClaim
+from paranoid_qa.contracts.common import SourceRef, document_id_from_filename
+from paranoid_qa.contracts.specific import RetrievedChunk, SpecificClaim
+from paranoid_qa.specific.verification import verify_specific_claim
 
 
 def run_case(case: dict) -> dict:
-    """Dispatch by case shape; return a record of gold vs. predicted verdict."""
+    """Dispatch by case shape; return a record of gold vs. predicted verdict.
+
+    The specific branch passes the claim as the question so the relevance gate has a subject
+    to check against (the critic gold set predates the gate and has no explicit question field).
+    """
     if "source_text" in case:  # specific-path case
-        claim = Claim(text=case["claim"], quote=case["quote"])
+        claim = SpecificClaim(text=case["claim"], quote=case["quote"])
         chunk: RetrievedChunk = {
             "text": case["source_text"],
             "document": case["document"],
             "page": case["page"],
         }
-        verdict = asyncio.run(verify_claim(claim, [chunk]))
+        verdict = asyncio.run(verify_specific_claim(claim, [chunk], case["claim"]))
         is_gate = case["gold"] == "fabricated"
     else:  # aggregate-path case
-        claim = Claim(text=case["answer"])  # no quote
-        references = [Source(document=d) for d in case["references"]]
-        verdict = asyncio.run(verify_claim(claim, [], case["context"], references))
+        agg_claim = AggregateClaim(text=case["answer"])
+        references = [
+            SourceRef(document_id=document_id_from_filename(d), filename=d)
+            for d in case["references"]
+        ]
+        verdict = asyncio.run(verify_aggregate_claim(agg_claim, case["context"], references))
         is_gate = not case["references"]
     return {
         "id": case["id"],

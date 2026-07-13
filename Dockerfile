@@ -30,4 +30,4 @@ COPY --chown=app:app --from=builder /artifacts/.lightrag ./.lightrag
 USER app
 
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn paranoid_qa.server:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn paranoid_qa.serving.api:app --host 0.0.0.0 --port ${PORT:-8000}"]

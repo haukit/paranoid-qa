@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from paranoid_qa.models import make_llm
+from paranoid_qa.llm.factory import make_chat_model
 
 OUT = Path("data/corpus/sample")
 OUT.mkdir(exist_ok=True)
@@ -13,7 +13,7 @@ SCENARIOS = [
     "a business jet pressurization fault at high altitude",
 ]
 
-llm = make_llm(temperature=0.7)
+llm = make_chat_model(role="generator", temperature=0.7)
 SYS = (
     "You write short, self-contained fictional aviation incident reports for a demo corpus. "
     "200-300 words. Include a fictional registration, date, location, sequence of events, "

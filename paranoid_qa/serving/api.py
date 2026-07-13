@@ -1,6 +1,10 @@
-"""FastAPI server
+"""FastAPI server.
 
-Run: uv run uvicorn paranoid_qa.server:app --reload"""
+Run: uv run uvicorn paranoid_qa.serving.api:app --reload
+
+Internal graph nodes use path-prefixed names (specific_retrieve, aggregate_verify, ...). Those are
+mapped to stable public stage names here so package-internal renaming never becomes a frontend API.
+"""
 
 from __future__ import annotations
 
@@ -17,12 +21,12 @@ from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttribu
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
-from paranoid_qa import demo
-from paranoid_qa.aggregate import corpus_filenames, document_text
 from paranoid_qa.config import settings
-from paranoid_qa.graph import build_graph
-from paranoid_qa.telemetry import TokenCostProcessor
-from paranoid_qa.tracing import setup_tracing
+from paranoid_qa.corpus.repository import get_document_text, list_documents
+from paranoid_qa.serving import demo
+from paranoid_qa.serving.telemetry import TokenCostProcessor
+from paranoid_qa.serving.tracing import setup_tracing
+from paranoid_qa.workflow.graph import build_graph
 
 tracer_provider = setup_tracing()
 _token_cost = TokenCostProcessor()
@@ -39,6 +43,17 @@ app.add_middleware(
 )
 graph = build_graph()
 
+# Internal (path-prefixed) node name -> stable public SSE stage name.
+PUBLIC_STAGE_NAMES = {
+    "specific_retrieve": "retrieve",
+    "specific_grade": "grade",
+    "specific_rewrite": "rewrite",
+    "specific_generate": "generate",
+    "specific_verify": "verify",
+    "aggregate_answer": "aggregate",
+    "aggregate_verify": "verify_aggregate",
+}
+
 
 @contextmanager
 def _ask_span(question: str):
@@ -51,12 +66,11 @@ def _ask_span(question: str):
         )
         span.set_attribute(SpanAttributes.INPUT_VALUE, question)
         span.set_attribute("question", question)
-
         yield span
 
 
 def _record_output(span, payload: dict) -> None:
-    """Record the final payload and its faithfulness as output attributes on the span."""
+    """Record the final payload, its faithfulness, and its status as output attributes."""
     span.set_attribute(SpanAttributes.OUTPUT_VALUE, json.dumps(payload))
     span.set_attribute(SpanAttributes.OUTPUT_MIME_TYPE, "application/json")
     span.set_attribute("faithful", bool(payload.get("faithful", False)))
@@ -64,7 +78,7 @@ def _record_output(span, payload: dict) -> None:
 
 
 def _totals(trace_id: int, latency_ms: int) -> dict:
-    """Extract the trace's token/cost totals and pair them with the request latency for the payload."""
+    """Extract the trace's token/cost totals and pair them with the request latency."""
     usage = _token_cost.pop(trace_id)
     return {
         "tokens_in": usage.tokens_in,
@@ -174,7 +188,7 @@ def require_demo_session(x_demo_session: str | None = Header(default=None)) -> s
 def corpus() -> dict:
     """List the documents backing the demo (empty if no index is present, e.g. stub mode)."""
     try:
-        return {"documents": list(corpus_filenames())}
+        return {"documents": [doc.filename for doc in list_documents()]}
     except FileNotFoundError:
         return {"documents": []}
 
@@ -183,7 +197,7 @@ def corpus() -> dict:
 def source(name: str) -> dict:
     """Return a corpus document's extracted text for the view-source panel."""
     try:
-        text = document_text(name)
+        text = get_document_text(name)
     except FileNotFoundError:
         text = None
     if text is None:
@@ -197,43 +211,61 @@ def _sse(event: str, data: dict) -> str:
 
 
 def _progress(node: str, update: dict) -> dict:
-    """Return a JSON-safe outcome for a node's state update."""
-    data: dict = {"node": node}
-    for key in ("route", "grade", "faithful", "attempts", "status"):
-        if key in update:
-            data[key] = update[key]
-    if "chunks" in update:
-        data["chunks"] = len(update["chunks"])
-    if "verdicts" in update:
-        data["verdicts"] = [v.verdict for v in update["verdicts"]]
-    if update.get("answer") is not None:
-        data["claims"] = len(update["answer"].claims)
+    """Translate a node's internal state update into a public progress frame."""
+    data: dict = {"node": PUBLIC_STAGE_NAMES.get(node, node)}
+    if "route" in update:
+        data["route"] = update["route"]
+    if "specific_grade" in update:
+        data["grade"] = update["specific_grade"]
+    if "verification_passed" in update:
+        data["faithful"] = update["verification_passed"]
+    if "status" in update:
+        data["status"] = update["status"]
+    if "specific_chunks" in update:
+        data["chunks"] = len(update["specific_chunks"])
+
+    attempts = update.get("specific_retrieval_attempts", update.get("specific_revision_attempts"))
+    if attempts is not None:
+        data["attempts"] = attempts
+
+    verdicts = update.get("specific_verdicts") or update.get("aggregate_verdicts")
+    if verdicts is not None:
+        data["verdicts"] = [v.verdict for v in verdicts]
+
+    answer = update.get("answer")
+    if answer is not None:
+        data["claims"] = len(answer.claims)
     return data
 
 
 def _build_payload(state: dict) -> dict:
     """Collapse the final graph state into the JSON response."""
     answer = state.get("answer")
-    verdicts = state.get("verdicts") or []
-    claims = [
-        {
-            "text": c.text,
-            "quote": c.quote,
-            "citation": str(v.source) if v.source is not None else None,
-            "document": v.source.document if v.source is not None else None,
-            "verdict": v.verdict,
-            "explanation": v.explanation,
-        }
-        for c, v in zip(answer.claims if answer else [], verdicts)
-    ]
+    verdicts = state.get("specific_verdicts") or state.get("aggregate_verdicts") or []
+    answer_claims = answer.claims if answer is not None else []
+
+    claims = []
+    for c, v in zip(answer_claims, verdicts):
+        src = getattr(v, "source", None)
+        claims.append(
+            {
+                "text": c.text,
+                "quote": getattr(c, "quote", None),
+                "citation": str(src) if src is not None else None,
+                "document": src.filename if src is not None else None,
+                "verdict": v.verdict,
+                "explanation": v.explanation,
+            }
+        )
 
     return {
-        "answer": answer.text if answer else "",
+        "answer": answer.text if answer is not None else "",
+        "kind": answer.kind if answer is not None else state.get("route"),
         "claims": claims,
-        "faithful": state.get("faithful", False),
+        "faithful": state.get("verification_passed", False),
         "status": state.get("status", "answered"),
         "route": state.get("route"),
-        "attempts": state.get("attempts", 0),
+        "attempts": state.get("specific_revision_attempts", 0),
     }
 
 
@@ -241,6 +273,7 @@ def _stub_payload() -> dict:
     """Deterministic fake answer for stub-mode deployment; no graph or model run."""
     return {
         "answer": "This is a stub answer used for deployment testing.",
+        "kind": "specific",
         "claims": [],
         "faithful": True,
         "status": "answered",
@@ -254,7 +287,7 @@ async def _run(question: str) -> AsyncIterator[str]:
         yield _sse("answer", _stub_payload())
         return
 
-    state = {}
+    state: dict = {}
     started = time.perf_counter()
     with _ask_span(question) as span:
         trace_id = span.get_span_context().trace_id
@@ -279,9 +312,7 @@ async def _run(question: str) -> AsyncIterator[str]:
 
         payload = _build_payload(state)
         _record_output(span, payload)
-
         payload["telemetry"] = _totals(trace_id, int((time.perf_counter() - started) * 1000))
-
         yield _sse("answer", payload)
 
 
@@ -293,13 +324,10 @@ async def _run_to_payload(question: str) -> dict:
     started = time.perf_counter()
     with _ask_span(question) as span:
         trace_id = span.get_span_context().trace_id
-
         state = await graph.ainvoke({"question": question})
         payload = _build_payload(state)
         _record_output(span, payload)
-
         payload["telemetry"] = _totals(trace_id, int((time.perf_counter() - started) * 1000))
-
         return payload
 
 

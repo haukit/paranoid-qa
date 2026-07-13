@@ -9,8 +9,8 @@ import json
 import sys
 from pathlib import Path
 
-from paranoid_qa.graph import build_graph
-from paranoid_qa.verify import locate_quote
+from paranoid_qa.specific.verification import locate_quote
+from paranoid_qa.workflow.graph import build_graph
 
 GOLD = Path("evals/data/retrieval_gold.jsonl")
 OUT = Path("evals/studies/verification_ablation_results.jsonl")
@@ -23,18 +23,19 @@ def load_questions() -> list[str]:
 
 def record(question: str, mode: str, state: dict) -> dict:
     answer = state.get("answer")
-    chunks = state.get("chunks", [])
+    chunks = state.get("specific_chunks", [])
     claims = [
         {"text": c.text, "quote": c.quote, "located": locate_quote(c.quote, chunks) is not None}
         for c in (answer.claims if answer else [])
-        if c.quote is not None
+        if getattr(c, "quote", None) is not None
     ]
     return {
         "question": question,
         "mode": mode,
-        "attempts": state.get("attempts", 0),
+        "attempts": state.get("specific_revision_attempts", 0),
         "verdicts": [
-            {"verdict": v.verdict, "explanation": v.explanation} for v in state.get("verdicts", [])
+            {"verdict": v.verdict, "explanation": v.explanation}
+            for v in state.get("specific_verdicts", [])
         ],
         "n_quoted": len(claims),
         "fabricated": sum(1 for c in claims if not c["located"]),

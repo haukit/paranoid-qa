@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from paranoid_qa.graph import build_graph
+from paranoid_qa.workflow.graph import build_graph
 
 
 def main() -> None:
@@ -16,16 +16,23 @@ def main() -> None:
 
     app = build_graph()
     result = asyncio.run(app.ainvoke({"question": question}))
-    answer = result["answer"]
+
+    answer = result.get("answer")
+    if result.get("status") == "abstained" or answer is None:
+        print("No verified answer: the answer could not be grounded in the sources.")
+        return
 
     print(answer.text, "\n")
     for c in answer.claims:
         line = f"- {c.text}"
-        if c.quote is not None:
-            line += f"\n    quote: {c.quote!r}"
+        quote = getattr(c, "quote", None)
+        if quote is not None:
+            line += f"\n    quote: {quote!r}"
         print(line)
-    if answer.references:
-        print("\nsources:", ", ".join(str(s) for s in answer.references))
+
+    references = getattr(answer, "references", [])
+    if references:
+        print("\nsources:", ", ".join(str(s) for s in references))
 
 
 if __name__ == "__main__":

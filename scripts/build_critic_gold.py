@@ -19,9 +19,9 @@ from llama_index.core.schema import BaseNode
 from pydantic import BaseModel, Field
 
 from paranoid_qa.config import STORAGE_DIR
-from paranoid_qa.models import make_structured_llm
-from paranoid_qa.schemas import RetrievedChunk
-from paranoid_qa.verify import locate_quote
+from paranoid_qa.contracts.specific import RetrievedChunk
+from paranoid_qa.llm.factory import make_structured
+from paranoid_qa.specific.verification import locate_quote
 
 SEED = 23
 PER_DOC = 4  # questions per document; sparse reports are capped at what they have
@@ -136,7 +136,7 @@ def generate_positives() -> list[dict]:
         ]
 
     sample = sample_chunks(load_chunks(), PER_DOC, SEED, MIN_CHARS)
-    gen = make_structured_llm(TrueTriple, model=GEN_MODEL, temperature=0)
+    gen = make_structured(TrueTriple, model=GEN_MODEL, temperature=0)
 
     rows = []
     for i, node in enumerate(sample, 1):
@@ -184,8 +184,8 @@ def make_unsupported(positives: list[dict], seed: int) -> list[dict]:
 
 
 def make_contradicted(positives: list[dict], model: str) -> list[dict]:
-    mut = make_structured_llm(Mutation, model=model, temperature=0)
-    chk = make_structured_llm(Check, model=model, temperature=0)
+    mut = make_structured(Mutation, model=model, temperature=0)
+    chk = make_structured(Check, model=model, temperature=0)
     rows: list[dict] = []
     for p in positives:
         prompt = f"SOURCE:\n{p['source_text']}\n\nCLAIM: {p['claim']}\n\nQUOTE: {p['quote']}"

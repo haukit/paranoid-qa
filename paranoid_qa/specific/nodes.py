@@ -1,12 +1,17 @@
-"""Core LangGraph nodes for the retrieval-and-answer loop."""
+"""Specific-path LangGraph nodes: retrieve, grade, rewrite, generate.
+
+Nodes are pure: state in, partial-state dict out. Retrieval rewriting increments
+`specific_retrieval_attempts`; answer revision is counted separately in the verifier.
+"""
 
 from __future__ import annotations
 
 from typing import cast
 
-from paranoid_qa.index import get_retriever
-from paranoid_qa.models import make_llm, make_structured_llm
-from paranoid_qa.schemas import Answer, Grade, GraphState, RetrievedChunk
+from paranoid_qa.contracts.specific import Grade, RetrievedChunk, SpecificAnswer
+from paranoid_qa.contracts.state import GraphState
+from paranoid_qa.llm.factory import make_chat_model, make_generator
+from paranoid_qa.specific.retrieval import retrieve_chunks
 
 GENERATE_SYSTEM = """You answer questions strictly from the provided sources.
 
@@ -38,49 +43,43 @@ def _format_chunks(chunks: list[RetrievedChunk]) -> str:
 
 
 async def retrieve(state: GraphState) -> GraphState:
-    """Fetch candidate chunks for the question"""
-    nodes = await get_retriever().aretrieve(state["question"])
-    chunks: list[RetrievedChunk] = [
-        {
-            "text": n.text,
-            "document": n.metadata.get("file_name", "?"),
-            "page": n.metadata.get("page_label"),
-        }
-        for n in nodes
-    ]
-    return {"chunks": chunks}
+    """Fetch candidate chunks for the question."""
+    chunks = await retrieve_chunks(state["question"])
+    return {"specific_chunks": chunks}
 
 
 async def grade(state: GraphState) -> GraphState:
-    """Judge whether the retrieved docs are good enough to answer"""
-    question = state["question"]
-    context = _format_chunks(state["chunks"])
+    """Judge whether the retrieved docs are good enough to answer."""
+    context = _format_chunks(state.get("specific_chunks", []))
 
-    grader = make_structured_llm(Grade)
+    grader = make_generator(Grade)
     messages = [
         ("system", GRADE_SYSTEM),
-        ("human", f"Documents:\n{context}\n\nQuestion: {question}"),
+        ("human", f"Documents:\n{context}\n\nQuestion: {state['question']}"),
     ]
     result = cast(Grade, await grader.ainvoke(messages))
-    return {"grade": "yes" if result.relevant else "no"}
+    return {"specific_grade": "yes" if result.relevant else "no"}
 
 
 async def rewrite(state: GraphState) -> GraphState:
-    """Reformulate the question for another retrieval pass; count the attempt."""
-    llm = make_llm()
+    """Reformulate the question for another retrieval pass; count the retrieval attempt."""
+    llm = make_chat_model(role="generator")
     messages = [
         ("system", REWRITE_SYSTEM),
         ("human", f"Original question: {state['question']}\n\nRewritten question:"),
     ]
     rewritten = str((await llm.ainvoke(messages)).content)
-    return {"question": rewritten, "attempts": state.get("attempts", 0) + 1}
+    return {
+        "question": rewritten,
+        "specific_retrieval_attempts": state.get("specific_retrieval_attempts", 0) + 1,
+    }
 
 
 def _feedback(state: GraphState) -> str:
     """Render critic feedback from the last verify pass; '' on the first generate."""
     answer = state.get("answer")
-    verdicts = state.get("verdicts") or []
-    if not answer or not verdicts:
+    verdicts = state.get("specific_verdicts") or []
+    if not isinstance(answer, SpecificAnswer) or not verdicts:
         return ""
     rejected = [
         f'- claim: "{c.text}"\n  quote: "{c.quote}"\n  rejected ({v.verdict}): {v.explanation}'
@@ -93,21 +92,15 @@ def _feedback(state: GraphState) -> str:
 
 
 async def generate(state: GraphState) -> GraphState:
-    """Produce a grounded Answer (claims + verbatim quotes) from chunks,
-    incorporating critic feedback on a revise pass."""
-    question = state["question"]
-    context = _format_chunks(state["chunks"])
+    """Produce a grounded SpecificAnswer (claims + verbatim quotes), applying critic feedback."""
+    context = _format_chunks(state.get("specific_chunks", []))
 
-    structured = make_structured_llm(Answer)
-
-    human = f"Sources:\n{context}\n\nQuestion: {question}"
+    structured = make_generator(SpecificAnswer)
+    human = f"Sources:\n{context}\n\nQuestion: {state['question']}"
     feedback = _feedback(state)
     if feedback:
         human += f"\n\n{feedback}"
 
-    messages = [
-        ("system", GENERATE_SYSTEM),
-        ("human", human),
-    ]
+    messages = [("system", GENERATE_SYSTEM), ("human", human)]
     answer = await structured.ainvoke(messages)
-    return {"answer": cast(Answer, answer)}
+    return {"answer": cast(SpecificAnswer, answer)}

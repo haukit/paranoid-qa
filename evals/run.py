@@ -38,7 +38,7 @@ import json
 import sys
 from pathlib import Path
 
-from paranoid_qa.graph import build_graph
+from paranoid_qa.workflow.graph import build_graph
 
 
 def check_case(case: dict, state: dict) -> list[str]:
@@ -47,11 +47,12 @@ def check_case(case: dict, state: dict) -> list[str]:
     answer = state.get("answer")
     claims = answer.claims if answer else []
     text = (answer.text if answer else "").lower()
-    cited = {v.source.document for v in state.get("verdicts", []) if v.source}
+    verdicts = state.get("specific_verdicts") or state.get("aggregate_verdicts") or []
+    cited = {v.source.filename for v in verdicts if getattr(v, "source", None)}
     fails = []
 
-    if "faithful" in checks and state.get("faithful") != checks["faithful"]:
-        fails.append(f"faithful={state.get('faithful')} (want {checks['faithful']})")
+    if "faithful" in checks and state.get("verification_passed") != checks["faithful"]:
+        fails.append(f"faithful={state.get('verification_passed')} (want {checks['faithful']})")
     if "empty_answer" in checks and (len(claims) == 0) != checks["empty_answer"]:
         fails.append(f"claims={len(claims)} (want empty={checks['empty_answer']})")
     for term in checks.get("answer_contains", []):

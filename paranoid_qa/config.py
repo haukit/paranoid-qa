@@ -36,10 +36,14 @@ class Settings(BaseSettings):
     embed_provider: str = "openai"
 
     gen_model: str = "gpt-4o-mini"  # the generator (local: "qwen3.5:9b")
-    critic_model: str = (
-        "gpt-4o-mini"  # use a different family for real decorrelation (local: "gemma4:12b")
-    )
+    critic_model: str = "gpt-5.4-nano"  # different family from the generator (local: "gemma4:12b")
     embed_model: str = "text-embedding-3-small"  # local: "bge-m3"
+
+    # The critic must be a different model family from the generator so their errors decorrelate.
+    # Families are configured explicitly (never inferred from model-name string parsing) and
+    # validated at startup by llm.policy.validate_model_policy.
+    gen_model_family: str = "gpt-4o"  # local: "qwen"
+    critic_model_family: str = "gpt-5.4"  # local: "gemma"
 
     corpus: Path = PROJECT_ROOT / "data" / "corpus" / "sample"
     storage: Path = PROJECT_ROOT / ".storage"

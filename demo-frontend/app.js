@@ -171,6 +171,7 @@ const NODE_LABELS = {
   generate: "Drafting a grounded answer",
   verify: "Verifying each claim against its source",
   aggregate: "Searching the corpus knowledge graph",
+  verify_aggregate: "Verifying the answer against its sources",
   accept: "Answer verified, accepting",
   abstain: "No grounded answer, abstaining",
 };

@@ -1,9 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from paranoid_qa import demo
 from paranoid_qa.config import settings
-from paranoid_qa.server import app
+from paranoid_qa.serving import demo
+from paranoid_qa.serving.api import app
 
 client = TestClient(app)
 

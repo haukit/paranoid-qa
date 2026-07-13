@@ -20,7 +20,7 @@ from llama_index.core.schema import BaseNode
 from pydantic import BaseModel, Field
 
 from paranoid_qa.config import STORAGE_DIR
-from paranoid_qa.models import make_structured_llm
+from paranoid_qa.llm.factory import make_structured
 
 SEED = 23
 PER_DOC = 6  # questions per document; sparse reports are capped at what they have
@@ -80,7 +80,7 @@ def make_row(i: int, node: BaseNode, qa: GoldQA) -> dict:
 
 def main() -> None:
     sample = sample_chunks(load_chunks(), PER_DOC, SEED, MIN_CHARS)
-    gen = make_structured_llm(GoldQA, model=GEN_MODEL, temperature=0)
+    gen = make_structured(GoldQA, model=GEN_MODEL, temperature=0)
 
     rows = []
     for i, node in enumerate(sample, 1):
