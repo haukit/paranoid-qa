@@ -60,6 +60,7 @@ def _record_output(span, payload: dict) -> None:
     span.set_attribute(SpanAttributes.OUTPUT_VALUE, json.dumps(payload))
     span.set_attribute(SpanAttributes.OUTPUT_MIME_TYPE, "application/json")
     span.set_attribute("faithful", bool(payload.get("faithful", False)))
+    span.set_attribute("status", str(payload.get("status", "")))
 
 
 def _totals(trace_id: int, latency_ms: int) -> dict:
@@ -198,7 +199,7 @@ def _sse(event: str, data: dict) -> str:
 def _progress(node: str, update: dict) -> dict:
     """Return a JSON-safe outcome for a node's state update."""
     data: dict = {"node": node}
-    for key in ("route", "grade", "faithful", "attempts"):
+    for key in ("route", "grade", "faithful", "attempts", "status"):
         if key in update:
             data[key] = update[key]
     if "chunks" in update:
@@ -230,6 +231,7 @@ def _build_payload(state: dict) -> dict:
         "answer": answer.text if answer else "",
         "claims": claims,
         "faithful": state.get("faithful", False),
+        "status": state.get("status", "answered"),
         "route": state.get("route"),
         "attempts": state.get("attempts", 0),
     }
@@ -241,6 +243,7 @@ def _stub_payload() -> dict:
         "answer": "This is a stub answer used for deployment testing.",
         "claims": [],
         "faithful": True,
+        "status": "answered",
         "telemetry": {"tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "latency_ms": 0},
     }
 

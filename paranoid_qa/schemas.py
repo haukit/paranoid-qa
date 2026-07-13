@@ -72,9 +72,18 @@ class Answer(BaseModel):
 class ClaimVerdict(BaseModel):
     """The critic's independent judgment of a single (claim, quote) pair."""
 
-    verdict: Literal["supported", "unsupported", "contradicted", "fabricated"]
+    verdict: Literal["supported", "unsupported", "contradicted", "fabricated", "irrelevant"]
     explanation: str = Field(description="Why the cited source does or does not support the claim.")
     source: Source | None = None  # derived by the verifier when the quote is located
+
+
+class RelevanceVerdict(BaseModel):
+    """Whether a quote's source document is about the question's subject (checked before support)."""
+
+    relevant: bool = Field(
+        description="True if the source document concerns the subject the question asks about."
+    )
+    explanation: str = Field(description="Why the source is or isn't about the question's subject.")
 
 
 # Specify as TypedDict, instead of Pydantic model, for LangGraph dict-merge;
@@ -90,4 +99,5 @@ class GraphState(TypedDict, total=False):
     verdicts: list[ClaimVerdict]
     faithful: bool
     attempts: int
+    status: str  # "answered" | "abstained"; represents terminal outcome (set by accept/abstain)
     context: str
