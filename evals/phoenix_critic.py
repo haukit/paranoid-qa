@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Critic precision/recall over critic_gold.jsonl, as a Phoenix experiment.
 
-Task: run verify_claim on each labeled (claim, quote, source) triple and return its verdict.
+Task: run verify_specific_claim on each labeled (claim, quote, source) triple and return its verdict.
 
 Evaluators: verdict_exact (4-way accuracy) and confusion_cell (binary
 supported-vs-not).
@@ -18,8 +18,8 @@ from typing import Mapping
 from phoenix.client import Client
 from phoenix.client.experiments import run_experiment
 
-from paranoid_qa.schemas import Claim, RetrievedChunk
-from paranoid_qa.verify import verify_claim
+from paranoid_qa.contracts.specific import RetrievedChunk, SpecificClaim
+from paranoid_qa.specific.verification import verify_specific_claim
 
 GOLD = Path("evals/data/critic_gold.jsonl")
 
@@ -29,13 +29,14 @@ def load_rows() -> list[dict]:
 
 
 def task(input) -> dict:
-    claim = Claim(text=input["claim"], quote=input["quote"])
+    claim = SpecificClaim(text=input["claim"], quote=input["quote"])
     chunk: RetrievedChunk = {
         "text": input["source_text"],
         "document": input["document"],
         "page": input["page"],
     }
-    v = asyncio.run(verify_claim(claim, [chunk]))
+    # Pass the claim as the question so the relevance gate has a subject (the gold set predates it).
+    v = asyncio.run(verify_specific_claim(claim, [chunk], input["claim"]))
     return {"verdict": v.verdict, "explanation": v.explanation}
 
 

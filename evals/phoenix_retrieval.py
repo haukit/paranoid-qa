@@ -18,7 +18,7 @@ from phoenix.client import Client
 from phoenix.client.experiments import run_experiment
 
 from paranoid_qa.config import settings
-from paranoid_qa.index import get_retriever
+from paranoid_qa.specific.retrieval import get_retriever
 
 GOLD = Path("evals/data/retrieval_gold.jsonl")
 

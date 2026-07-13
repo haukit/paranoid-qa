@@ -4,10 +4,10 @@ install:
 	uv sync --extra serve --extra dev
 
 index:
-	uv run python -c "from paranoid_qa.index import build_index; build_index()"
+	uv run python -c "from paranoid_qa.specific.indexing import build_specific_index; build_specific_index()"
 
 graph-index:
-	uv run python -c "from paranoid_qa.aggregate import build_lightrag; build_lightrag()"
+	uv run python -c "from paranoid_qa.aggregate.indexing import build_aggregate_index; build_aggregate_index()"
 
 demo-index:
 	rm -rf .storage .lightrag
@@ -19,7 +19,7 @@ demo-artifact:
 	tar -czf demo_artifacts/ntsb-demo-index.tar.gz .storage .lightrag
 
 serve:
-	uv run uvicorn paranoid_qa.server:app --reload
+	uv run uvicorn paranoid_qa.serving.api:app --reload
 
 health:
 	curl -f http://localhost:8000/healthz

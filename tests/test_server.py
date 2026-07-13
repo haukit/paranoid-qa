@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from paranoid_qa.server import app
+from paranoid_qa.serving.api import app
 
 client = TestClient(app)
 
