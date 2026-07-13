@@ -65,13 +65,15 @@ function addHistory(question, payload) {
     .map((h) => {
       const p = h.payload || {};
       const cost = p.telemetry ? "$" + p.telemetry.cost_usd.toFixed(4) : "";
-      const verified = p.faithful
-        ? `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`
-        : `<span class="badge badge-bad"><i class="ti ti-shield-x"></i> unverified</span>`;
+      const abstained = p.status === "abstained";
+      const badge = abstained
+        ? `<span class="badge badge-abstain"><i class="ti ti-hand-stop"></i> abstained</span>`
+        : `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`;
+      const answerLine = abstained ? "No verified answer in the corpus." : truncate(p.answer || "", 140);
       return `<li class="hist">
         <div class="hist-q">${escapeHtml(h.question)}</div>
-        <div class="hist-a">${escapeHtml(truncate(p.answer || "", 140))}</div>
-        <div class="hist-meta">${verified}${cost ? ` <span class="badge"><i class="ti ti-coin"></i> ${cost}</span>` : ""}</div>
+        <div class="hist-a">${escapeHtml(answerLine)}</div>
+        <div class="hist-meta">${badge}${cost ? ` <span class="badge"><i class="ti ti-coin"></i> ${cost}</span>` : ""}</div>
       </li>`;
     })
     .join("");
@@ -82,10 +84,12 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n).trimEnd() + "…" : s;
 }
 
-// one-click example questions, one for each path (specific vs aggreagte)
+// one-click examples: a specific-path answer, an aggregate-path answer, and an
+// unanswerable question (a flight not in the corpus) that triggers an abstention
 const SUGGESTIONS = [
   "What was the probable cause of the Executive Airlines Flight 5401 accident?",
   "What factors recur across these accident reports?",
+  "What was the probable cause of the Trans-Global Airlines Flight 88 crash?",
 ];
 
 function renderSuggestions() {
@@ -167,6 +171,8 @@ const NODE_LABELS = {
   generate: "Drafting a grounded answer",
   verify: "Verifying each claim against its source",
   aggregate: "Searching the corpus knowledge graph",
+  accept: "Answer verified, accepting",
+  abstain: "No grounded answer, abstaining",
 };
 
 // render the graph nodes as a vertical timeline; show a "running" row until done
@@ -203,23 +209,41 @@ function nodeSummary(n) {
   return "";
 }
 
-// compose the answer view: badges, cost disclaimer, prose answer, verified-claims panel
+// compose the answer view: badges, cost disclaimer, prose answer, verified-claims panel.
+// an abstention renders as a positive "no verified answer" result instead of a prose answer.
 function renderAnswer(payload) {
+  if (payload.status === "abstained") {
+    answerEl.innerHTML = badgesHtml(payload) + abstainedHtml() + costNote();
+    answerEl.hidden = false;
+    return;
+  }
   answerEl.innerHTML =
     badgesHtml(payload) +
-    `<p class="cost-note"><small>Reported cost excludes query embedding, which is negligible.</small></p>` +
+    costNote() +
     `<p>${escapeHtml(payload.answer)}</p>` +
     claimsHtml(payload.claims);
   answerEl.hidden = false;
 }
 
-// route, verified/unverified, revised count, and the cost/token totals
+function costNote() {
+  return `<p class="cost-note"><small>Reported cost excludes query embedding, which is negligible.</small></p>`;
+}
+
+// the abstention panel: the system checked and declined rather than emit an unsupported claim
+function abstainedHtml() {
+  return `<div class="abstain">
+    <div class="abstain-title"><i class="ti ti-hand-stop"></i> No verified answer</div>
+    <p>The verifier was unable to match the drafted answer to the source documents.</p>
+  </div>`;
+}
+
+// route, outcome (verified vs abstained), revised count, and the cost/token totals
 function badgesHtml(p) {
   const badges = [];
   if (p.route) badges.push(`<span class="badge badge-route"><i class="ti ti-route"></i> ${escapeHtml(p.route)} path</span>`);
-  badges.push(p.faithful
-    ? `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`
-    : `<span class="badge badge-bad"><i class="ti ti-shield-x"></i> unverified</span>`);
+  badges.push(p.status === "abstained"
+    ? `<span class="badge badge-abstain"><i class="ti ti-hand-stop"></i> abstained</span>`
+    : `<span class="badge badge-ok"><i class="ti ti-shield-check"></i> verified</span>`);
   if (p.attempts > 1) badges.push(`<span class="badge"><i class="ti ti-refresh"></i> revised ${p.attempts - 1}×</span>`);
   if (p.telemetry) badges.push(`<span class="badge">${fmtTotals(p.telemetry)}</span>`);
   return `<div class="badges">${badges.join("")}</div>`;
