@@ -1,10 +1,14 @@
 # paranoid-qa
 
+[![ci](https://github.com/haukit/paranoid-qa/actions/workflows/ci.yml/badge.svg)](https://github.com/haukit/paranoid-qa/actions/workflows/ci.yml)
+
 A grounded, self-verifying question-answering service over a document corpus.
 
-Every answer is decomposed into atomic claims, each backed by a verbatim quote from the sources. A separate critic (a different model), excluded from the generator's reasoning,  independently verifies that each quote (a) actually exists in the retrieved documents and (b) genuinely supports its claim, attaching the source citation (document + page). Unsupported or fabricated claims are regenerated with the critic's feedback. All correction loops are bounded by a retry budget.
+Every answer is decomposed into atomic claims, each backed by a verbatim quote from the sources. A separate critic (a different model), excluded from the generator's reasoning,  independently verifies that each quote (a) actually exists in the retrieved documents and (b) genuinely supports its claim, attaching the source citation (document + page). Unsupported or fabricated claims are regenerated with the critic's feedback, bounded by a retry budget; when no claim can be grounded within that budget, the service abstains rather than return an unsupported answer.
 
 A live demo runs at [haukit.github.io/paranoid-qa](https://haukit.github.io/paranoid-qa/), over a corpus of real NTSB accident reports and gated behind an invite code (see [Deployment](#deployment)).
+
+![Paranoid QA answering a question end to end: the live verification pipeline with per-node model, tokens, cost and latency, the verified answer, and each claim backed by a verbatim quote and citation.](assets/demo.png)
 
 Stack: LangGraph (orchestration), LlamaIndex (hybrid retrieval + reranking), LightRAG (graph-based corpus-level retrieval), Pydantic (typed structured outputs), OpenAI (also supports local models via Ollama)
 
@@ -29,17 +33,18 @@ Run fully locally instead: `uv sync --extra ollama`, set `provider` / `embed_pro
 
 A router sends each question down one of two paths, each with its own grounding guarantee:
 
-```
-START -> route
-    -> "specific"  -> retrieve -> grade
-        -> "yes" -> generate -> verify
-            -> accept       -> END   (status: answered)
-            -> revise       -> generate
-            -> abstain      -> END   (status: abstained)
-        -> "no"  -> rewrite -> retrieve
-    -> "aggregate" -> aggregate -> verify_aggregate
-            -> accept  -> END
-            -> abstain -> END
+```mermaid
+flowchart TD
+    Q([question]) --> route
+    route -->|specific| retrieve --> grade
+    grade -->|relevant| generate --> verify
+    grade -->|not relevant| rewrite --> retrieve
+    verify -->|verified| accept([answered])
+    verify -->|unsupported, retries left| generate
+    verify -->|cannot ground| abstain([abstained])
+    route -->|aggregate| aggregate --> verify_aggregate
+    verify_aggregate -->|verified| accept
+    verify_aggregate -->|cannot ground| abstain
 ```
 
 The engine is organized as two independently owned vertical paths, `paranoid_qa/specific/` and `paranoid_qa/aggregate/`, composed by `paranoid_qa/workflow/`. Shared corpus access lives in `paranoid_qa/corpus/`, typed contracts in `paranoid_qa/contracts/`, model construction and the critic-family policy in `paranoid_qa/llm/`, and the FastAPI service in `paranoid_qa/serving/`.
@@ -171,3 +176,7 @@ I containerized the service and run it as a live, access-gated demo: a FastAPI b
 - `verify_aggregate`: add an LLM entailment pass (does the answer follow from the cited documents?) on top of reference existence.
 - Evaluation: generation faithfulness / answer relevance (LLM-judge), multi-hop retrieval with NDCG, the candidate-ceiling Recall@10, and harder critic negatives (more "unless"-style inversions).
 - Deployment: durable Postgres-backed sessions and quotas (currently in-memory, reset on restart).
+
+## License
+
+MIT, see [LICENSE](LICENSE).
